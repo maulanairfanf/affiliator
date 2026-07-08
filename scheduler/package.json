@@ -1,0 +1,17 @@
+{
+  "name": "affiliator-scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "npx tsx index.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "node-cron": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.0.0",
+    "typescript": "^5"
+  }
+}

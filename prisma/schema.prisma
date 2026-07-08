@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  password  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  products  Product[]
+  contents  Content[]
+  schedules Schedule[]
+  templates Template[]
+}
+
+model Product {
+  id            String    @id @default(cuid())
+  userId        String
+  title         String
+  price         Float
+  currency      String    @default("IDR")
+  imageUrl      String?
+  videoUrl      String?
+  description   String?
+  source        String    // "shopee" | "amazon" | "manual"
+  sourceUrl     String?
+  affiliateLink String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents      Content[]
+  schedules     Schedule[]
+}
+
+model Content {
+  id         String     @id @default(cuid())
+  userId     String
+  productId  String?
+  platform   String     // "tiktok" | "instagram" | "facebook" | "x" | "youtube"
+  type       String     // "caption" | "script" | "cta" | "hashtag" | "title" | "seo" | "faq"
+  content    String
+  templateId String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  product    Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedules  Schedule[]
+  template   Template?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+}
+
+model Template {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  style       String    // "soft_selling" | "hard_selling" | "storytelling" | "review" | "problem_solution"
+  prompt      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents    Content[]
+}
+
+model Schedule {
+  id          String    @id @default(cuid())
+  userId      String
+  productId   String
+  contentId   String
+  platform    String
+  scheduledAt DateTime
+  status      String    @default("pending") // "pending" | "published" | "failed"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  content     Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
