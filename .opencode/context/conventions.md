@@ -2,29 +2,24 @@
 
 ## Enums: Use Const Objects
 
-**Rule:** Co-locate const objects and derived types. Never scatter string literals like `"tiktok"` or `"caption"` across call sites.
+**Rule:** Co-locate const objects and derived types. Never scatter string literals like `"threads"` or `"short_caption"` across call sites.
 
 **Location:** `src/lib/constants.ts`
 
 **Pattern:**
 ```ts
 export const Platform = {
-  Tiktok: "tiktok",
-  Instagram: "instagram",
-  Facebook: "facebook",
-  X: "x",
-  Youtube: "youtube",
+  Threads: "threads",
 } as const;
 export type Platform = (typeof Platform)[keyof typeof Platform];
 
 export const ContentType = {
-  Caption: "caption",
-  Script: "script",
+  ShortCaption: "short_caption",
+  LongCaption: "long_caption",
+  Hook: "hook",
   Cta: "cta",
   Hashtag: "hashtag",
-  Title: "title",
-  Seo: "seo",
-  Faq: "faq",
+  ProductSummary: "product_summary",
 } as const;
 export type ContentType = (typeof ContentType)[keyof typeof ContentType];
 
@@ -53,10 +48,42 @@ export type ScheduleStatus = (typeof ScheduleStatus)[keyof typeof ScheduleStatus
 ```
 
 **Usage:**
-- ✅ `content.platform === Platform.Tiktok`
-- ❌ `content.platform === "tiktok"`
-- ✅ `content.type === ContentType.Caption`
-- ❌ `content.type === "caption"`
+- ✅ `content.platform === Platform.Threads`
+- ❌ `content.platform === "threads"`
+- ✅ `content.type === ContentType.ShortCaption`
+- ❌ `content.type === "short_caption"`
+
+---
+
+## Zod Validation
+
+**Rule:** Every mutating API route must validate input server-side with Zod.
+
+**Location:** `src/lib/validation/schemas.ts`
+
+**Pattern:**
+```ts
+import { z } from "zod";
+import { Platform, ContentType, ProductSource } from "@/lib/constants";
+
+export const createProductSchema = z.object({
+  title: z.string().min(1),
+  price: z.number().positive(),
+  source: z.enum(Object.values(ProductSource) as [string, ...string[]]),
+  // ... more fields
+});
+
+// In route file:
+const parsed = createProductSchema.safeParse(body);
+if (!parsed.success) {
+  return NextResponse.json(
+    { error: "Validation failed", errors: parsed.error.flatten().fieldErrors },
+    { status: 400 }
+  );
+}
+```
+
+**Note:** Cast `parsed.data as TargetType` at call site when Zod infers `string` instead of const object literal types (e.g., `ProductSource`).
 
 ---
 
@@ -67,7 +94,7 @@ export type ScheduleStatus = (typeof ScheduleStatus)[keyof typeof ScheduleStatus
 **Pattern:**
 - `src/lib/constants.ts` — Shared types and const objects (NO server-only imports)
 - `src/lib/auth.ts` — Server-only functions (session handling)
-- `src/lib/ai.ts` — Server-only (OpenAI client wrapper)
+- `src/lib/db/` — Server-only (Prisma queries)
 - `src/lib/utils.ts` — Shared utilities (`cn()`)
 
 **Client components:**
@@ -83,7 +110,7 @@ import { auth } from "@/lib/auth";
 import { Platform, ContentType } from "@/lib/constants";
 ```
 
-**Never:** Import `@/lib/auth`, `@/lib/ai`, or `@/lib/db` in client components.
+**Never:** Import `@/lib/auth`, `@/lib/db`, or `@/lib/db/*` in client components.
 
 ---
 
@@ -123,6 +150,7 @@ export function ProductCard({ product, onSelect, className }: ProductCardProps) 
 - Use `cn()` from `@/lib/utils` for conditional classes
 - One component per file, filename matches export name
 - Return `null` early when not applicable (avoid conditional wrappers)
+- No `asChild` on Button (Base UI doesn't support it)
 
 ### Known reusable components
 
@@ -130,9 +158,8 @@ export function ProductCard({ product, onSelect, className }: ProductCardProps) 
 |-----------|---------|---------|
 | `product-card.tsx` | search results, product list | Display product info |
 | `content-card.tsx` | generator output, library | Display generated content |
-| `platform-badge.tsx` | content card, schedule list | Show platform label with icon |
 | `affiliate-link-input.tsx` | product detail, content edit | Input + validate affiliate link |
-| `schedule-picker.tsx` | new schedule, content page | Date/time + platform picker |
+| `dashboard-sidebar.tsx` | dashboard layout | Sidebar navigation |
 
 ### State handling
 
@@ -200,18 +227,18 @@ export interface Content {
 }
 
 export interface GeneratedContent {
-  caption?: string;
-  hashtags?: string[];
-  cta?: string;
-  script?: string;
-  faq?: Array<{ question: string; answer: string }>;
-  seo?: { title: string; description: string };
+  short_caption?: string;
+  long_caption?: string;
+  hook?: string[];
+  cta?: string[];
+  hashtag?: string[];
+  product_summary?: string;
 }
 
 export interface GenerationRequest {
   productId: string;
   platform: Platform;
-  type: ContentType[];
+  types: ContentType[];
   style?: TemplateStyle;
   templateId?: string;
 }
@@ -219,7 +246,7 @@ export interface GenerationRequest {
 export interface GenerationResponse {
   content: GeneratedContent;
   platform: Platform;
-  type: ContentType[];
+  types: ContentType[];
 }
 ```
 
@@ -272,6 +299,8 @@ export interface AiProviderConfig {
   apiKey: string;
   model: string;
   temperature?: number;
+  baseURL?: string;
+  defaultHeaders?: Record<string, string>;
 }
 ```
 
@@ -319,9 +348,10 @@ export interface WithPagination {
 |-------|---------------|----------|
 | UI Component | Render + user interaction | `src/components/features/*.tsx` |
 | Page | Compose components + data fetching | `src/app/**/page.tsx` |
-| API Route | HTTP handling + validation | `src/app/api/**/route.ts` |
+| API Route | HTTP handling + Zod validation | `src/app/api/**/route.ts` |
 | Business Logic | Domain rules | `src/lib/*/service.ts` |
 | DB Query | Prisma access | `src/lib/db/*.ts` |
+| Validation | Zod schemas | `src/lib/validation/schemas.ts` |
 | Type | Shape definitions | `src/types/*.ts` |
 
 **Rule:** One file = one responsibility. If a file does two things, split it.
@@ -330,55 +360,49 @@ export interface WithPagination {
 
 **Pattern:** Registry pattern for extensible components.
 
-```ts
+```typescript
 // lib/contents/generator.ts — registry
-const generators: Record<Platform, ContentGenerator> = {
-  [Platform.Tiktok]: tiktokGenerator,
-  [Platform.Instagram]: instagramGenerator,
-  [Platform.Facebook]: facebookGenerator,
-  [Platform.X]: xGenerator,
-  [Platform.Youtube]: youtubeGenerator,
+const prompts = {
+  threads: {
+    short_caption: { system, user },
+    long_caption: { system, user },
+    hook: { system, user },
+    cta: { system, user },
+    hashtag: { system, user },
+    product_summary: { system, user },
+  },
 };
-
-export async function generateContent(request: GenerationRequest) {
-  const generator = generators[request.platform];
-  return generator.generate(request);
-}
 ```
 
-Adding a new platform? Create a new generator file and add it to the registry. No edits to existing generators.
+Adding a new content type? Add to registry. No edits to existing handlers.
 
 ### L — Liskov Substitution
 
-**Pattern:** All content generators implement the `ContentGenerator` interface.
+**Pattern:** All AI providers implement the `AiProvider` interface.
 
 ```ts
-interface ContentGenerator {
+interface AiProvider {
   generate(request: GenerationRequest): Promise<ReadableStream>;
 }
 ```
 
-Any generator implementing this interface can be swapped in without breaking consumers.
+Any provider implementing this interface can be swapped in without breaking consumers.
 
 ### I — Interface Segregation
 
 **Pattern:** Small, focused interfaces instead of one big `AffiliatorService`.
 
 ```ts
-interface ProductSearcher {
-  search(query: string, source: ProductSource): Promise<ProductSearchResult[]>;
+interface ProductProvider {
+  search(query: string): Promise<ProductSearchResult[]>;
 }
 
-interface ProductScraper {
-  scrape(url: string): Promise<ProductSearchResult>;
-}
-
-interface ContentGenerator {
+interface AiProvider {
   generate(request: GenerationRequest): Promise<ReadableStream>;
 }
 
 interface SchedulePublisher {
-  publish(schedule: Schedule): Promise<void>;
+  postBatch(items: PostItem[]): Promise<PostResult[]>;
 }
 ```
 
@@ -390,22 +414,22 @@ interface SchedulePublisher {
 
 ```ts
 // lib/contents/service.ts — high level
-import type { ContentGenerator } from "@/types/ai";
+import type { AiProvider } from "@/types/ai";
 
 export class ContentService {
-  constructor(private generator: ContentGenerator) {}
+  constructor(private provider: AiProvider) {}
 
   async generate(request: GenerationRequest) {
-    return this.generator.generate(request);
+    return this.provider.generate(request);
   }
 }
 
 // Dependency injection at route level
-const openaiGenerator = new OpenAIProvider(config);
-const service = new ContentService(openaiGenerator);
+const openaiProvider = new OpenAIProvider(config);
+const service = new ContentService(openaiProvider);
 ```
 
-Testability: swap `openaiGenerator` with a mock in tests.
+Testability: swap `openaiProvider` with a mock in tests.
 
 ---
 
@@ -483,8 +507,8 @@ src/lib/db/
 - `list<X>(options?)` — many records with filters + pagination (`listProducts`, `listContents`)
 - `create<X>(data)` — created record
 - `update<X>(id, data)` — updated record
-- `delete<X>(id)` — Promise<void>
-- `count<X>(filter?)` — number
+- `delete<X>(id, userId)` — deletes with ownership verification
+- `count<X>(userId, filter?)` — number
 
 **Ownership filter:**
 ```ts
@@ -493,6 +517,20 @@ export async function listProducts(userId: string, filter?: ProductFilter) {
     where: { userId, ...buildWhere(filter) },
     orderBy: { createdAt: "desc" },
   });
+}
+```
+
+**Ownership verification on delete:**
+```ts
+export async function deleteContent(id: string, userId: string) {
+  const existing = await prisma.content.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+  if (!existing || existing.userId !== userId) {
+    throw new Error("Content not found");
+  }
+  return prisma.content.delete({ where: { id } });
 }
 ```
 
@@ -512,6 +550,10 @@ await prisma.$transaction(async (tx) => {
 
 1. **Auth check first** — Every mutating handler checks session and ownership as first step.
 
+2. **Zod validation** — Every mutating handler validates input server-side with `safeParse`.
+
+3. **Ownership verification** — POST endpoints referencing `productId`/`contentId` must verify the referenced entity belongs to the session user. DELETE endpoints must verify ownership before deleting.
+
 ```ts
 export async function POST(req: Request) {
   try {
@@ -519,7 +561,14 @@ export async function POST(req: Request) {
     if (!session?.user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
-    // ...
+
+    const body = await req.json();
+    const parsed = createProductSchema.safeParse(body);
+    if (!parsed.success) {
+      return Response.json({ error: "Validation failed", errors: parsed.error.flatten() }, { status: 400 });
+    }
+
+    // ... business logic
   } catch (error) {
     console.error("Failed to create product:", error);
     return Response.json({ error: "Internal server error" }, { status: 500 });
@@ -527,15 +576,13 @@ export async function POST(req: Request) {
 }
 ```
 
-2. **Wrap in try/catch** — Always. Log error, return 500 with generic message.
-
-3. **Return shape:**
+4. **Return shape:**
    - `{ data: ... }` for read
    - `{ success: true, data: ... }` for create/update
    - `{ error: "message" }` for failures
    - Validation errors: `{ error: "Validation failed", errors: { field: ["msg1"] } }`
 
-4. **Status codes:**
+5. **Status codes:**
    - 200 — OK (read or update)
    - 201 — Created (POST)
    - 400 — Bad Request (validation)
@@ -544,9 +591,9 @@ export async function POST(req: Request) {
    - 404 — Not Found
    - 500 — Internal Server Error
 
-5. **Validate input server-side** — Zod schemas on every mutation endpoint.
+6. **Wrap in try/catch** — Always. Log error, return 500 with generic message.
 
-6. **Use `prisma.$transaction`** — When mutating multiple records atomically.
+7. **Use `prisma.$transaction`** — When mutating multiple records atomically.
 
 ---
 
@@ -558,6 +605,40 @@ export async function POST(req: Request) {
 
 ---
 
+## Scheduler Worker Conventions
+
+**File structure:**
+```
+scheduler/
+├── index.ts                — Entry point: persistent browser launch, cron, graceful shutdown
+├── jobs/publish.ts         — Cron job logic: fetch due schedules, call publishBatch
+└── lib/
+    ├── db.ts               — Prisma client
+    ├── types.ts            — Schedule type
+    ├── publisher.ts        — Routes to ThreadsProvider (platform-based dispatch)
+    └── social/
+        ├── login.ts        — Playwright session login (press Enter to save)
+        └── threads.ts      — ThreadsProvider: post batch via Playwright
+```
+
+**Browser lifecycle:**
+- Start: launch `chromium.launch({ headless })` with session from `threads-state.json`
+- Cron ticks: reuse same browser instance for every `checkAndPublish()` call
+- Shutdown: `browser.close()` on SIGINT/SIGTERM
+
+**Posting:**
+- Use `ThreadsProvider.postBatch()` for batch posting — one browser, multiple posts
+- Use keyboard shortcut `Cmd+Enter` / `Ctrl+Enter` instead of DOM button click
+- Each post navigated via `page.goto()` → compose → fill → keyboard shortcut
+- Individual post failures caught with screenshot saved to `storage/errors/`
+
+**Session:**
+- Session file: `scheduler/storage/threads-state.json` (gitignored)
+- Login: `cd scheduler && npx tsx lib/social/login.ts`
+- Session auto-refreshed after each successful cron tick via `context.storageState()`
+
+---
+
 ## What NOT to Do
 
 - ❌ Don't put `prisma` calls in page or component files
@@ -566,12 +647,14 @@ export async function POST(req: Request) {
 - ❌ Don't use string literals for platforms, content types, template styles — use const objects
 - ❌ Don't define interfaces locally in components — import from `src/types/`
 - ❌ Don't pre-extract components for hypothetical reuse — wait for second occurrence
-- ❌ Don't skip auth checks in API routes
+- ❌ Don't skip auth/Zod checks in API routes
+- ❌ Don't skip ownership verification on DELETE or entity-referencing POST endpoints
 - ❌ Don't fetch in `useEffect` for page-load data — use server component
 - ❌ Don't import server-only modules (`@/lib/auth`, `@/lib/db`) in client components
 - ❌ Don't create barrel files (`index.ts` re-exports) — they hurt tree-shaking
 - ❌ Don't use raw HTML `<form>` — use `shadcn/ui` form components
 - ❌ Don't hardcode API URLs — use relative paths (`/api/...`)
+- ❌ Don't open/close Chromium per schedule — use persistent browser
 
 ## When to Refactor
 

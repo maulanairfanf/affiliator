@@ -9,6 +9,8 @@ export interface AiProviderConfig {
   apiKey: string;
   model: string;
   temperature?: number;
+  baseURL?: string;
+  defaultHeaders?: Record<string, string>;
 }
 
 export interface AiGenerateRequest {

@@ -1,8 +1,12 @@
-export default function LibraryPage() {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold">Content Library</h1>
-      <p className="text-muted-foreground">Browse all generated content</p>
-    </div>
-  );
+import { auth } from "@/lib/auth";
+import { listContents } from "@/lib/db/contents";
+import { LibraryClient } from "./client";
+
+export default async function LibraryPage() {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+
+  const contents = await listContents(session.user.id);
+
+  return <LibraryClient contents={contents} />;
 }

@@ -1,7 +1,16 @@
+import type { Browser, BrowserContext } from "playwright";
 import { prisma } from "../lib/db";
-import { publish } from "../lib/publisher";
+import { publishBatch } from "../lib/publisher";
 
-export async function checkAndPublish(): Promise<void> {
+export async function checkAndPublish(
+  browser: Browser | null,
+  context: BrowserContext | null,
+): Promise<void> {
+  if (!browser || !context) {
+    console.log("[Scheduler] No browser available, skipping check.");
+    return;
+  }
+
   const now = new Date();
 
   try {
@@ -15,23 +24,34 @@ export async function checkAndPublish(): Promise<void> {
 
     console.log(`[Scheduler] Found ${dueSchedules.length} due schedules`);
 
-    for (const schedule of dueSchedules) {
-      try {
-        await publish({
-          id: schedule.id,
-          platform: schedule.platform,
-          content: schedule.content.content,
-          productTitle: schedule.product.title,
-        });
+    if (dueSchedules.length === 0) return;
+
+    const results = await publishBatch(
+      browser,
+      context,
+      dueSchedules.map((s) => ({
+        id: s.id,
+        platform: s.platform,
+        content: s.content.content,
+        productTitle: s.product.title,
+        affiliateLink: s.product.affiliateLink || undefined,
+        sourceUrl: s.product.sourceUrl || undefined,
+      }))
+    );
+
+    for (const result of results) {
+      if (result.success) {
         await prisma.schedule.update({
-          where: { id: schedule.id },
+          where: { id: result.id },
           data: { status: "published" },
         });
-        console.log(`[Scheduler] Published schedule ${schedule.id}`);
-      } catch (error) {
-        console.error(`[Scheduler] Failed schedule ${schedule.id}:`, error);
+        console.log(`[Scheduler] Published schedule ${result.id}`);
+      } else {
+        console.error(
+          `[Scheduler] Failed schedule ${result.id}: ${result.error}`
+        );
         await prisma.schedule.update({
-          where: { id: schedule.id },
+          where: { id: result.id },
           data: { status: "failed" },
         });
       }

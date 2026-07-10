@@ -1,20 +1,15 @@
 export const Platform = {
-  Tiktok: "tiktok",
-  Instagram: "instagram",
-  Facebook: "facebook",
-  X: "x",
-  Youtube: "youtube",
+  Threads: "threads",
 } as const;
 export type Platform = (typeof Platform)[keyof typeof Platform];
 
 export const ContentType = {
-  Caption: "caption",
-  Script: "script",
+  ShortCaption: "short_caption",
+  LongCaption: "long_caption",
+  Hook: "hook",
   Cta: "cta",
   Hashtag: "hashtag",
-  Title: "title",
-  Seo: "seo",
-  Faq: "faq",
+  ProductSummary: "product_summary",
 } as const;
 export type ContentType = (typeof ContentType)[keyof typeof ContentType];
 

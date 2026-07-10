@@ -25,16 +25,16 @@ This project uses `.opencode/context/` for background knowledge that AI agents s
 
 ## Project Overview
 
-**Affiliator** is an affiliate content automation platform — not just an "AI tool". The core value is workflow automation: search products, generate promotional content, manage affiliate links, and schedule distribution across platforms.
+**Affiliator** is an affiliate content automation platform — not just an "AI tool". The core value is workflow automation: search products, generate promotional content, manage affiliate links, and schedule distribution to Threads.
 
 ### MVP Modules (5)
 
 | # | Module | Description |
 |---|--------|-------------|
-| 1 | **Product Manager** | Search Shopee/Amazon via API, paste manual link, save favorites |
-| 2 | **AI Content Generator** | Generate captions, scripts, hashtags, CTA per platform + template style |
-| 3 | **Content Library** | Save & browse all generated content history |
-| 4 | **Scheduler** | Schedule content for auto-publication (premium feature) |
+| 1 | **Product Manager** | Search Shopee/Amazon via API (mock), Manual Add, save favorites. Uses **ProductProvider** pattern — OCP for new sources. |
+| 2 | **AI Content Generator** | Generate Short Caption, Long Caption, Hooks, CTA, Hashtags, Product Summary via OpenRouter AI. Streaming JSON output. |
+| 3 | **Content Library** | Save & browse all generated content with product thumbnail + affiliate link. Copy with `🔗 {link}` ready for Threads. |
+| 4 | **Scheduler** | Schedule content for auto-publication via Playwright (Threads only). Persistent browser, batch posting. |
 
 ### Architecture
 
@@ -51,10 +51,18 @@ This project uses `.opencode/context/` for background knowledge that AI agents s
                            │
                     API Routes (/api/*)
                            │
-      ┌──────────────┬───────────────┬─────────────┐
-      ▼              ▼               ▼             ▼
-  Shopee API      Amazon API      OpenAI API   PostgreSQL
-  (PA-API 5)                                   (Prisma)
+      ┌──────────────┬───────────────┬──────────────────┐
+      ▼              ▼               ▼                  ▼
+  Shopee API      Amazon API    OpenRouter AI      PostgreSQL
+  (mock)          (mock)        (GPT-4o-mini)      (Prisma)
+
+                           Scheduler Worker (separate process)
+                                    │
+                                    ▼
+                               Playwright
+                                    │
+                                    ▼
+                               Threads.net
 ```
 
 ### Tech Stack
@@ -63,14 +71,15 @@ This project uses `.opencode/context/` for background knowledge that AI agents s
 |-------|-----------|
 | Framework | **Next.js 16** (App Router, Turbopack) |
 | Language | **TypeScript 5** (strict mode) |
-| UI Library | **React 19** + **shadcn/ui** (Radix primitives) |
+| UI Library | **React 19** + **shadcn/ui v4** (Base UI primitives) |
 | Styling | **Tailwind CSS 4** |
 | ORM | **Prisma 6** |
 | Database | **PostgreSQL 16** |
-| Auth | **NextAuth v5** (Auth.js) |
-| AI | **OpenAI API** (GPT-4o-mini, streaming) |
-| Validation | **Zod** |
+| Auth | **NextAuth v5** (Credentials + JWT) |
+| AI | **OpenRouter AI** (OpenAI-compatible, GPT-4o-mini, streaming) |
+| Validation | **Zod v4** |
 | Scheduler | **node-cron** (worker terpisah) |
+| Social Posting | **Playwright** (Threads, session-based) |
 | Icons | **lucide-react** |
 
 ### Key Directories
@@ -89,25 +98,32 @@ src/
 │       ├── auth/           — NextAuth route handlers
 │       ├── products/       — Product CRUD + search
 │       ├── contents/       — Content CRUD + AI generate
-│       ├── schedules/      — Schedule CRUD
-│       └── media/          — File upload
+│       └── schedules/      — Schedule CRUD
 ├── components/
 │   ├── ui/                 — shadcn/ui primitives — DO NOT modify
 │   └── features/           — Reusable feature components
 │       ├── product-card.tsx
 │       ├── content-card.tsx
-│       ├── platform-badge.tsx
 │       ├── affiliate-link-input.tsx
-│       └── schedule-picker.tsx
+│       └── dashboard-sidebar.tsx
 ├── lib/
 │   ├── db.ts               — Prisma client singleton
 │   ├── utils.ts            — cn() helper (clsx + tailwind-merge)
 │   ├── auth.ts             — Auth configuration
-│   ├── ai.ts               — OpenAI client wrapper
 │   ├── constants.ts        — Const objects (Platform, ContentType, TemplateStyle, etc.)
+│   ├── validation/         — Zod schemas (one file per entity group)
 │   ├── db/                 — Prisma query functions (one file per entity)
 │   ├── products/           — Product business logic + scrapers
+│   │   ├── service.ts      — Business logic
+│   │   ├── provider.ts     — ProductProvider interface + registry
+│   │   ├── shopee.ts       — ShopeeProvider (mock)
+│   │   └── amazon.ts       — AmazonProvider (mock)
 │   ├── contents/           — Content generation logic
+│   │   ├── service.ts      — Business logic
+│   │   ├── generator.ts    — Registry + orchestrator
+│   │   ├── prompts.ts      — Prompt templates per platform
+│   │   └── providers/
+│   │       └── openai.ts   — OpenRouter/OpenAI implementation
 │   └── schedules/          — Scheduling logic
 ├── types/
 │   ├── product.ts          — Product, ProductSearchResult, ProductSource, ProductFilter
@@ -117,14 +133,18 @@ src/
 │   ├── ai.ts               — AiProvider, GenerationRequest, GenerationResponse
 │   └── common.ts           — PaginatedResponse<T>, SelectOption, ApiResponse<T>, WithPagination
 └── styles/
-    └── globals.css         — Global styles + Tailwind
+    └── globals.css         — Global styles + Tailwind (Roboto via next/font)
 scheduler/                  — node-cron worker (terpisah dari Next.js)
-├── index.ts                — Entry point, cron setup
+├── index.ts                — Entry point: launches persistent browser, cron setup
 ├── jobs/
-│   └── publish.ts          — Check due schedules + publish
+│   └── publish.ts          — Check due schedules + publish (batch, single browser)
 └── lib/
     ├── db.ts               — Prisma client
-    └── publisher.ts        — Publish logic (placeholder for real API)
+    ├── types.ts            — Schedule type for publisher
+    ├── publisher.ts        — Publish logic: routes to ThreadsProvider
+    └── social/
+        ├── login.ts        — Playwright session login (press Enter to save)
+        └── threads.ts      — ThreadsProvider: post to Threads via Playwright
 ```
 
 ### Database Schema (Prisma)
@@ -161,8 +181,8 @@ model Content {
   id         String   @id @default(cuid())
   userId     String
   productId  String?
-  platform   String   // "tiktok" | "instagram" | "facebook" | "x" | "youtube"
-  type       String   // "caption" | "script" | "cta" | "hashtag" | "title" | "seo" | "faq"
+  platform   String   // "threads" only
+  type       String   // "short_caption" | "long_caption" | "hook" | "cta" | "hashtag" | "product_summary"
   content    String   @db.Text
   templateId String?
   product    Product? @relation(fields: [productId], references: [id])
@@ -199,27 +219,30 @@ model Schedule {
 
 #### Product Manager
 - **Alur**: User search via Shopee API / Amazon PA-API → tampilkan hasil → pilih & simpan → edit affiliate link manual
+- **ProductProvider pattern**: `ProductProvider` interface with `ShopeeProvider`, `AmazonProvider`, `ManualProvider` classes. Registry `getProvider()`. New source = new file + registry entry, no edits to core.
 - **File structure**:
   ```
   src/
   ├── app/(dashboard)/products/
   │   ├── page.tsx            — Daftar produk tersimpan
   │   ├── search/page.tsx     — Pencarian produk
+  │   ├── new/page.tsx        — Manual Add Product form
   │   └── [id]/page.tsx       — Detail produk
   ├── app/api/products/
   │   ├── route.ts            — CRUD produk
   │   └── search/route.ts     — Pencarian via API Shopee/Amazon
   ├── lib/products/
   │   ├── service.ts          — Business logic
-  │   ├── shopee.ts           — Shopee API wrapper
-  │   └── amazon.ts           — Amazon PA-API 5 wrapper
+  │   ├── provider.ts         — ProductProvider interface + registry
+  │   ├── shopee.ts           — ShopeeProvider (mock)
+  │   └── amazon.ts           — AmazonProvider (mock)
   └── lib/db/products.ts      — Prisma queries
   ```
 
 #### AI Content Generator
-- **Alur**: Pilih produk + platform + style → stream generate → preview → edit → simpan
-- **Platform**: TikTok, Instagram, Facebook, X, YouTube
-- **Type**: caption, script, hashtag, CTA, judul, FAQ, SEO
+- **Alur**: Pilih produk + platform (Threads) + style → stream generate → preview → edit → simpan
+- **Platform**: Threads only
+- **Type**: ShortCaption, LongCaption, Hook (20x), CTA (10x), Hashtags, ProductSummary
 - **Template Style**: soft_selling, hard_selling, storytelling, review, problem_solution
 - **File structure**:
   ```
@@ -235,23 +258,22 @@ model Schedule {
   │   ├── generator.ts        — Registry + orchestrator
   │   ├── prompts.ts          — Prompt templates per platform
   │   └── providers/
-  │       └── openai.ts       — OpenAI implementation
+  │       └── openai.ts       — OpenRouter/OpenAI implementation
   └── lib/db/contents.ts      — Prisma queries
   ```
 
 #### Content Library
-- **Alur**: Browse all generated content → filter by product/platform/date → copy → re-generate
+- **Alur**: Browse all generated content → filter by product/platform/date → copy (content + affiliate link) → delete
 - **File structure**:
   ```
   src/
   ├── app/(dashboard)/library/
-  │   └── page.tsx            — Grid/list view with filters
-  └── app/api/library/
-      └── route.ts            — List content with pagination + filter
+  │   ├── page.tsx            — Server component, fetches data
+  │   └── client.tsx          — Grid view with filters, copy, delete
   ```
 
 #### Scheduler
-- **Alur**: Pilih content + platform + waktu → simpan → cron worker cek tiap menit → update status
+- **Alur**: Pilih content + waktu → simpan → cron worker cek tiap menit → post ke Threads via Playwright → update status
 - **File structure**:
   ```
   src/
@@ -263,11 +285,15 @@ model Schedule {
   └── lib/db/schedules.ts     — Prisma queries
 
   scheduler/                   — Worker terpisah
-  ├── index.ts                — node-cron: * /1 * * * *
-  ├── jobs/publish.ts         — Check + execute due schedules
+  ├── index.ts                — Launches persistent Playwright browser, node-cron: * /1 * * * *
+  ├── jobs/publish.ts         — Check due schedules → publishBatch (1 browser, N posts)
   └── lib/
       ├── db.ts               — Prisma client
-      └── publisher.ts        — Publish logic (placeholder)
+      ├── types.ts            — Schedule type
+      ├── publisher.ts        — Routes to ThreadsProvider
+      └── social/
+          ├── login.ts        — Playwright session login (press Enter to save)
+          └── threads.ts      — ThreadsProvider: post batch via Playwright, keyboard shortcut
   ```
 
 ---
@@ -290,17 +316,21 @@ Specialized AI agents for different tasks. Invoke by name when you need specific
 - Identify security issues (missing Zod validation, direct prisma calls in components)
 - Review database transaction usage
 - Ensure reusable component patterns are followed
+- Check ownership validation on DELETE/PUT endpoints
 
 **Rules:**
-- Use `Platform.Tiktok`, NEVER `"tiktok"`
-- Use `ContentType.Caption`, NEVER `"caption"`
+- Use `Platform.Threads`, NEVER `"threads"`
+- Use `ContentType.ShortCaption`, NEVER `"short_caption"`
 - Use `TemplateStyle.SoftSelling`, NEVER `"soft_selling"`
 - Every mutating API route must have session check + ownership validation
+- DELETE endpoints must verify userId before deleting
+- POST endpoints that reference other entities (productId, contentId) must verify ownership
 - No `any` type — use `unknown` and narrow
 - No `console.log` in committed code
 - Wrap API route logic in try/catch
 - Direct prisma calls only in `src/lib/db/` files
 - Components > 300 lines must be decomposed
+- Zod validation required on every mutating API route
 
 **Tools:** Read-only access to all files
 
@@ -333,6 +363,8 @@ Specialized AI agents for different tasks. Invoke by name when you need specific
 - Components in `components/features/` must be reusable (used by 2+ pages)
 - Search existing components before writing new ones — don't re-invent
 - Every data view must handle: loading skeleton, empty state, error state
+- No `asChild` on Button (Base UI doesn't support it)
+- Font: Roboto via `next/font/google`
 
 **Tools:** Full access to `src/components/`, `src/app/` pages, `src/lib/utils.ts`
 
@@ -353,9 +385,9 @@ Specialized AI agents for different tasks. Invoke by name when you need specific
 - Build REST API endpoints following established patterns
 - Design Prisma schemas and write query functions
 - Implement AI content generation with streaming
-- Integrate Shopee API and Amazon PA-API 5
-- Implement scheduler worker logic
-- Apply SOLID principles: registry pattern for generators, interface-based design
+- Integrate Shopee API and Amazon PA-API 5 (via ProductProvider pattern)
+- Implement scheduler worker with Playwright (persistent browser, batch posting)
+- Apply SOLID principles: registry pattern for generators/providers, interface-based design
 
 **Rules:**
 - Auth check first: session validation + user ownership
@@ -366,6 +398,9 @@ Specialized AI agents for different tasks. Invoke by name when you need specific
 - Use const objects for platforms, content types, template styles
 - AI providers implement `AiProvider` interface — easily swappable
 - New platform/content type = new entry in registry, no editing existing code (OCP)
+- Product providers implement `ProductProvider` interface — new source = new file
+- Scheduler: persistent browser at startup, `ThreadsProvider.postBatch()` for batch posting
+- Threads posting uses keyboard shortcut `Cmd+Enter` / `Ctrl+Enter` (not DOM click, avoids overlay issues)
 
 **Tools:** Full access to `src/app/api/`, `src/lib/db/`, `src/lib/products/`, `src/lib/contents/`, `prisma/`, `scheduler/`
 

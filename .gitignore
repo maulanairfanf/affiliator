@@ -50,3 +50,5 @@ src/generated/
 
 # Scheduler
 scheduler/node_modules/
+scheduler/storage/threads-state.json
+scheduler/storage/errors/

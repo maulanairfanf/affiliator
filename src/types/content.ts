@@ -13,12 +13,12 @@ export interface Content {
 }
 
 export interface GeneratedContent {
-  caption?: string;
-  hashtags?: string[];
-  cta?: string;
-  script?: string;
-  faq?: Array<{ question: string; answer: string }>;
-  seo?: { title: string; description: string };
+  short_caption?: string;
+  long_caption?: string;
+  hook?: string[];
+  cta?: string[];
+  hashtag?: string[];
+  product_summary?: string;
 }
 
 export interface GenerationRequest {

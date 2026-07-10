@@ -3,6 +3,8 @@ export interface Schedule {
   platform: string;
   content: string;
   productTitle: string;
+  affiliateLink?: string;
+  sourceUrl?: string;
 }
 
 export interface PublishTarget {
