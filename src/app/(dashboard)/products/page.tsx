@@ -11,19 +11,27 @@ export default async function ProductsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Products</h1>
           <p className="text-muted-foreground">
             {products.length} product{products.length !== 1 ? "s" : ""} saved
           </p>
         </div>
-        <Link
-          href="/products/search"
-          className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-        >
-          Search Product
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/products/new"
+            className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            Add Product
+          </Link>
+          <Link
+            href="/products/search"
+            className="inline-flex h-8 items-center justify-center rounded-lg bg-secondary px-2.5 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+          >
+            Search
+          </Link>
+        </div>
       </div>
 
       {products.length === 0 ? (

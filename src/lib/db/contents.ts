@@ -9,12 +9,42 @@ interface CreateContentData {
   templateId?: string;
 }
 
-export async function listContents(userId: string) {
-  return prisma.content.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    include: { product: { select: { title: true, imageUrl: true, sourceUrl: true, affiliateLink: true } } },
-  });
+interface ListContentsParams {
+  userId: string;
+  search?: string;
+  platform?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function listContents({ userId, search, platform, page = 1, pageSize = 20 }: ListContentsParams) {
+  const skip = (page - 1) * pageSize;
+
+  const where: Record<string, unknown> = { userId };
+
+  if (platform && platform !== "all") {
+    where.platform = platform;
+  }
+
+  if (search) {
+    where.OR = [
+      { content: { contains: search, mode: "insensitive" } },
+      { product: { title: { contains: search, mode: "insensitive" } } },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.content.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      include: { product: { select: { title: true, imageUrl: true, sourceUrl: true, affiliateLink: true } } },
+    }),
+    prisma.content.count({ where }),
+  ]);
+
+  return { data, total, page, pageSize, hasMore: skip + data.length < total };
 }
 
 export async function getContent(id: string) {

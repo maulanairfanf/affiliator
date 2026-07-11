@@ -5,15 +5,21 @@ import { getProduct } from "@/lib/db/products";
 import { getContent } from "@/lib/db/contents";
 import { createScheduleSchema } from "@/lib/validation/schemas";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const schedules = await listSchedules(session.user.id);
-    return NextResponse.json({ data: schedules });
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || undefined;
+    const status = searchParams.get("status") || undefined;
+    const page = parseInt(searchParams.get("page") || "1");
+    const pageSize = parseInt(searchParams.get("pageSize") || "20");
+
+    const result = await listSchedules({ userId: session.user.id, search, status, page, pageSize });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to list schedules:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -38,9 +44,11 @@ export async function POST(request: NextRequest) {
 
     const { productId, contentId, platform, scheduledAt } = parsed.data;
 
-    const product = await getProduct(productId);
-    if (!product || product.userId !== session.user.id) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    if (productId) {
+      const product = await getProduct(productId);
+      if (!product || product.userId !== session.user.id) {
+        return NextResponse.json({ error: "Product not found" }, { status: 404 });
+      }
     }
 
     const content = await getContent(contentId);
@@ -50,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const schedule = await createSchedule({
       userId: session.user.id,
-      productId,
+      productId: productId || undefined,
       contentId,
       platform,
       scheduledAt: new Date(scheduledAt),

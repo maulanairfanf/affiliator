@@ -2,21 +2,50 @@ import { prisma } from "@/lib/db";
 
 interface CreateScheduleData {
   userId: string;
-  productId: string;
+  productId?: string;
   contentId: string;
   platform: string;
   scheduledAt: Date;
 }
 
-export async function listSchedules(userId: string) {
-  return prisma.schedule.findMany({
-    where: { userId },
-    orderBy: { scheduledAt: "asc" },
-    include: {
-      product: { select: { title: true, imageUrl: true } },
-      content: { select: { content: true } },
-    },
-  });
+interface ListSchedulesParams {
+  userId: string;
+  search?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function listSchedules({ userId, search, status, page = 1, pageSize = 20 }: ListSchedulesParams) {
+  const skip = (page - 1) * pageSize;
+
+  const where: Record<string, unknown> = { userId };
+
+  if (status && status !== "all") {
+    where.status = status;
+  }
+
+  if (search) {
+    where.OR = [
+      { product: { title: { contains: search, mode: "insensitive" } } },
+    ];
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.schedule.findMany({
+      where,
+      orderBy: { scheduledAt: "asc" },
+      skip,
+      take: pageSize,
+      include: {
+        product: { select: { title: true, imageUrl: true } },
+        content: { select: { content: true } },
+      },
+    }),
+    prisma.schedule.count({ where }),
+  ]);
+
+  return { data, total, page, pageSize, hasMore: skip + data.length < total };
 }
 
 export async function getSchedule(id: string) {
@@ -39,12 +68,9 @@ export async function deleteSchedule(id: string, userId: string) {
 }
 
 export async function countSchedules(userId: string, status?: string) {
-  const where: { userId: string; status?: string; scheduledAt?: object } = { userId };
+  const where: Record<string, unknown> = { userId };
   if (status) {
     where.status = status;
-    if (status === "pending") {
-      where.scheduledAt = { gte: new Date() };
-    }
   }
   return prisma.schedule.count({ where });
 }

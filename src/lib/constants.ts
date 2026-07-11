@@ -10,6 +10,7 @@ export const ContentType = {
   Cta: "cta",
   Hashtag: "hashtag",
   ProductSummary: "product_summary",
+  Riddle: "riddle",
 } as const;
 export type ContentType = (typeof ContentType)[keyof typeof ContentType];
 

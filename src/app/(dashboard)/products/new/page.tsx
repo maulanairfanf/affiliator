@@ -15,8 +15,43 @@ export default function NewProductPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [description, setDescription] = useState("");
   const [affiliateLink, setAffiliateLink] = useState("");
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [isScraping, setIsScraping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleScrape() {
+    if (!scrapeUrl.trim()) return;
+
+    setIsScraping(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/products/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scrapeUrl.trim() }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Failed to scrape URL");
+        return;
+      }
+
+      const product = json.data;
+      setTitle(product.title || "");
+      setPrice(product.price ? String(product.price) : "");
+      setCurrency(product.currency || "IDR");
+      setImageUrl(product.imageUrl || "");
+      setDescription(product.description || "");
+    } catch {
+      setError("Failed to scrape URL. Try filling manually.");
+    } finally {
+      setIsScraping(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,6 +92,33 @@ export default function NewProductPage() {
     <div className="max-w-lg">
       <h1 className="mb-6 text-2xl font-bold">Add Product</h1>
 
+      <Card className="mb-4 p-4">
+        <div className="space-y-2">
+          <Label>Product Link</Label>
+          <div className="flex gap-2">
+            <Input
+              value={scrapeUrl}
+              onChange={(e) => setScrapeUrl(e.target.value)}
+              placeholder="https://shopee.co.id/... or https://amazon.com/..."
+              onKeyDown={(e) => e.key === "Enter" && handleScrape()}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleScrape}
+              disabled={isScraping || !scrapeUrl.trim()}
+              className="shrink-0"
+            >
+              {isScraping ? "Scraping..." : "Scrape"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Paste a product link to auto-fill the form below.
+          </p>
+        </div>
+      </Card>
+
       <Card className="p-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -69,7 +131,7 @@ export default function NewProductPage() {
             />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex-1 space-y-2">
               <Label>Price *</Label>
               <Input
@@ -81,7 +143,7 @@ export default function NewProductPage() {
                 required
               />
             </div>
-            <div className="w-24 space-y-2">
+            <div className="w-full sm:w-24 space-y-2">
               <Label>Currency</Label>
               <Input
                 value={currency}

@@ -2,7 +2,7 @@ export interface Schedule {
   id: string;
   platform: string;
   content: string;
-  productTitle: string;
+  productTitle?: string;
   affiliateLink?: string;
   sourceUrl?: string;
 }

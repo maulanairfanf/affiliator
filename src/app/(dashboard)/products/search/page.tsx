@@ -94,9 +94,9 @@ export default function SearchPage() {
     <div>
       <h1 className="mb-6 text-2xl font-bold">Search Products</h1>
 
-      <form onSubmit={handleSearch} className="mb-8 flex gap-3">
+      <form onSubmit={handleSearch} className="mb-8 flex flex-col gap-2 sm:flex-row sm:gap-3">
         <Select items={productSources} value={source} onValueChange={(value) => value && setSource(value)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -116,10 +116,10 @@ export default function SearchPage() {
           }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="flex-1"
+          className="w-full sm:flex-1"
         />
 
-        <Button type="submit" disabled={isSearching || !query.trim()}>
+        <Button type="submit" disabled={isSearching || !query.trim()} className="w-full sm:w-auto">
           {isSearching ? "Searching..." : "Search"}
         </Button>
       </form>

@@ -28,8 +28,8 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-6 flex items-start gap-6">
-        <div className="aspect-square w-48 shrink-0 overflow-hidden rounded-lg bg-muted">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+        <div className="aspect-square w-full max-w-48 shrink-0 overflow-hidden rounded-lg bg-muted">
           {product.imageUrl ? (
             <img
               src={product.imageUrl}

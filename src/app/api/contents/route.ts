@@ -3,15 +3,21 @@ import { auth } from "@/lib/auth";
 import { listContents, createContent, deleteContent } from "@/lib/db/contents";
 import { createContentSchema } from "@/lib/validation/schemas";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const contents = await listContents(session.user.id);
-    return NextResponse.json({ data: contents });
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || undefined;
+    const platform = searchParams.get("platform") || undefined;
+    const page = parseInt(searchParams.get("page") || "1");
+    const pageSize = parseInt(searchParams.get("pageSize") || "20");
+
+    const result = await listContents({ userId: session.user.id, search, platform, page, pageSize });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to list contents:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

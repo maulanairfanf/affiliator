@@ -93,7 +93,7 @@ export default function NewSchedulePage() {
           <div className="space-y-2">
             <Label>Product</Label>
             <Select items={products} value={productId} onValueChange={(v) => v && setProductId(v)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full truncate">
                 <SelectValue placeholder="Select product..." />
               </SelectTrigger>
               <SelectContent>

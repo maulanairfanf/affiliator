@@ -33,9 +33,9 @@ export async function checkAndPublish(
         id: s.id,
         platform: s.platform,
         content: s.content.content,
-        productTitle: s.product.title,
-        affiliateLink: s.product.affiliateLink || undefined,
-        sourceUrl: s.product.sourceUrl || undefined,
+        productTitle: s.product?.title,
+        affiliateLink: s.product?.affiliateLink || undefined,
+        sourceUrl: s.product?.sourceUrl || undefined,
       }))
     );
 

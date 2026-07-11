@@ -32,7 +32,7 @@ export const generateContentSchema = z.object({
 });
 
 export const createScheduleSchema = z.object({
-  productId: z.string().min(1, "Product ID is required"),
+  productId: z.string().optional(),
   contentId: z.string().min(1, "Content ID is required"),
   platform: z.enum(Object.values(Platform) as [string, ...string[]]),
   scheduledAt: z.string().min(1, "Schedule time is required"),

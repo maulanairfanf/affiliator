@@ -82,75 +82,70 @@ export default function ContentsPage() {
     setIsGenerating(true);
     setError(null);
     setResults({});
-    setStreamingTypes(new Set(selectedTypes));
+    setStreamingTypes(new Set());
 
     const controller = new AbortController();
     abortRef.current = controller;
 
-    try {
-      const res = await fetch("/api/contents/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          platform,
-          types: selectedTypes,
-          style,
-        }),
-        signal: controller.signal,
-      });
+    for (const type of selectedTypes) {
+      if (controller.signal.aborted) break;
 
-      if (!res.ok) {
-        const json = await res.json();
-        setError(json.error || "Generation failed");
-        setIsGenerating(false);
-        return;
-      }
+      setStreamingTypes(new Set([type]));
 
-      const reader = res.body?.getReader();
-      if (!reader) return;
+      try {
+        const res = await fetch("/api/contents/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            platform,
+            types: [type],
+            style,
+          }),
+          signal: controller.signal,
+        });
 
-      const decoder = new TextDecoder();
-      let buffer = "";
+        if (!res.ok) {
+          const json = await res.json();
+          setError(json.error || `Failed to generate ${type}`);
+          continue;
+        }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const reader = res.body?.getReader();
+        if (!reader) continue;
 
-        buffer += decoder.decode(value, { stream: true });
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        try {
-          const parsed = JSON.parse(buffer);
-          const newResults: Record<string, string> = {};
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-          for (const type of selectedTypes) {
+          buffer += decoder.decode(value, { stream: true });
+
+          try {
+            const parsed = JSON.parse(buffer);
             const val = parsed[type];
             if (val !== undefined && val !== null) {
-              newResults[type] = Array.isArray(val) ? val.join("\n\n") : String(val);
+              setResults((prev) => ({
+                ...prev,
+                [type]: Array.isArray(val) ? val.join("\n\n") : String(val),
+              }));
             }
+          } catch {
+            // incomplete JSON, wait for more
           }
-
-          setResults(newResults);
-
-          const doneTypes = new Set(Object.keys(newResults));
-          setStreamingTypes((prev) => {
-            const next = new Set(prev);
-            doneTypes.forEach((t) => next.delete(t));
-            return next;
-          });
-        } catch {
-          // incomplete JSON, wait for more chunks
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name !== "AbortError") {
+          setError(`Failed to generate ${type}`);
         }
       }
-    } catch (err) {
-      if (err instanceof Error && err.name !== "AbortError") {
-        setError("Generation failed. Please try again.");
-      }
-    } finally {
-      setIsGenerating(false);
-      setStreamingTypes(new Set());
-      abortRef.current = null;
     }
+
+    setIsGenerating(false);
+    setStreamingTypes(new Set());
+    abortRef.current = null;
   }
 
   function handleStop() {
@@ -219,7 +214,7 @@ export default function ContentsPage() {
           <div className="space-y-2">
             <Label>Product</Label>
             <Select items={products} value={productId} onValueChange={(v) => v && setProductId(v)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full truncate">
                 <SelectValue placeholder="Select a product..." />
               </SelectTrigger>
               <SelectContent>
@@ -292,7 +287,9 @@ export default function ContentsPage() {
             onClick={handleGenerate}
             disabled={isGenerating || !productId || selectedTypes.length === 0}
           >
-            {isGenerating ? "Generating..." : "Generate"}
+            {isGenerating
+              ? `Generating ${Object.keys(results).length + 1}/${selectedTypes.length}...`
+              : "Generate"}
           </Button>
           {isGenerating && (
             <Button variant="outline" onClick={handleStop}>
