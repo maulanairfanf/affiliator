@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, startTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,8 +20,10 @@ interface ContentItem {
   type: string;
   content: string;
   title: string | null;
+  productId: string | null;
   createdAt: Date | string;
   product: {
+    id: string;
     title: string;
     imageUrl: string | null;
     sourceUrl: string | null;
@@ -53,7 +54,6 @@ const platformOptions = [
 ];
 
 export function LibraryClient() {
-  const router = useRouter();
   const [items, setItems] = useState<ContentItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -72,44 +72,52 @@ export function LibraryClient() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchItems = useCallback(
-    async (pageNum: number, append: boolean) => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (debouncedSearch) params.set("search", debouncedSearch);
-        if (platformFilter !== "all") params.set("platform", platformFilter);
-        params.set("page", String(pageNum));
-        params.set("pageSize", "20");
+  function fetchItems(pageNum: number, append: boolean) {
+    startTransition(() => setIsLoading(true));
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (platformFilter !== "all") params.set("platform", platformFilter);
+    params.set("page", String(pageNum));
+    params.set("pageSize", "20");
 
-        const res = await fetch(`/api/contents?${params}`);
-        const result: FetchResult = await res.json();
-
-        if (append) {
-          setItems((prev) => [...prev, ...result.data]);
-        } else {
-          setItems(result.data);
-        }
-        setTotal(result.total);
-        setPage(result.page);
-        setHasMore(result.hasMore);
-      } catch {
-        // silent
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [debouncedSearch, platformFilter]
-  );
+    fetch(`/api/contents?${params}`)
+      .then((res) => res.json())
+      .then((result: FetchResult) => {
+        startTransition(() => {
+          setItems((prev) => (append ? [...prev, ...result.data] : result.data));
+          setTotal(result.total);
+          setPage(result.page);
+          setHasMore(result.hasMore);
+        });
+      })
+      .catch(() => {})
+      .finally(() => startTransition(() => setIsLoading(false)));
+  }
 
   useEffect(() => {
-    setItems([]);
-    setPage(1);
     fetchItems(1, false);
-  }, [fetchItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, platformFilter]);
 
   function handleLoadMore() {
     fetchItems(page + 1, true);
+  }
+
+  async function handlePostNow(item: ContentItem) {
+    try {
+      await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform: item.platform,  
+          contentId: item.id,
+          productId: item.productId || undefined,
+          scheduledAt: new Date().toISOString(),
+        }),
+      });
+    } catch {
+      // silent
+    }
   }
 
   async function handleCopy(item: ContentItem) {
@@ -236,8 +244,8 @@ export function LibraryClient() {
                         target={productLink ? "_blank" : undefined}
                         rel="noopener noreferrer"
                         className="shrink-0"
-                      >
-                        <img
+                        >
+                          <img
                           src={item.product.imageUrl}
                           alt={item.product.title}
                           className="h-16 w-16 rounded-lg border object-cover"
@@ -327,6 +335,12 @@ export function LibraryClient() {
                             </>
                           ) : (
                             <>
+                              <Button
+                                size="xs"
+                                onClick={() => handlePostNow(item)}
+                              >
+                                Post Now
+                              </Button>
                               <Button
                                 size="xs"
                                 variant="outline"

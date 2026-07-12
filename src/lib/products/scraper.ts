@@ -179,7 +179,7 @@ export async function scrapeFromUrl(url: string): Promise<ProductSearchResult> {
 
   // Fetch HTML with crawler UA (after Chrome UA follows short link redirects)
   try {
-    const { html, finalUrl, debug } = await fetchAsCrawler(url);
+    const { html, debug } = await fetchAsCrawler(url);
     const $ = cheerio.load(html);
     const meta = extractMeta($, html);
     const ld = extractJsonLd($);

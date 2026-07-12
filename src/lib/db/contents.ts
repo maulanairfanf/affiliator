@@ -40,7 +40,7 @@ export async function listContents({ userId, search, platform, page = 1, pageSiz
       orderBy: { createdAt: "desc" },
       skip,
       take: pageSize,
-      include: { product: { select: { title: true, imageUrl: true, sourceUrl: true, affiliateLink: true } } },
+      include: { product: { select: { id: true, title: true, imageUrl: true, sourceUrl: true, affiliateLink: true } } },
     }),
     prisma.content.count({ where }),
   ]);

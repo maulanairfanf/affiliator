@@ -29,6 +29,7 @@ export function DashboardSidebar() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(false);
   }, [pathname]);
 

@@ -76,6 +76,17 @@ export async function deleteSchedule(id: string, userId: string) {
   return prisma.schedule.delete({ where: { id } });
 }
 
+export async function updateSchedule(id: string, userId: string, data: { scheduledAt?: Date; status?: string }) {
+  const existing = await prisma.schedule.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+  if (!existing || existing.userId !== userId) {
+    throw new Error("Schedule not found");
+  }
+  return prisma.schedule.update({ where: { id }, data });
+}
+
 export async function countSchedules(userId: string, status?: string) {
   const where: Record<string, unknown> = { userId };
   if (status) {

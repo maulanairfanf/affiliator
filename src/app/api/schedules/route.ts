@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { listSchedules, createSchedule, deleteSchedule } from "@/lib/db/schedules";
+import { listSchedules, createSchedule, deleteSchedule, updateSchedule } from "@/lib/db/schedules";
 import { getProduct } from "@/lib/db/products";
 import { getContent } from "@/lib/db/contents";
 import { createScheduleSchema } from "@/lib/validation/schemas";
@@ -69,6 +69,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: schedule }, { status: 201 });
   } catch (error) {
     console.error("Failed to create schedule:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await request.json();
+    if (!id) {
+      return NextResponse.json({ error: "Schedule ID required" }, { status: 400 });
+    }
+
+    const updated = await updateSchedule(id, session.user.id, {
+      scheduledAt: new Date(),
+      status: "pending",
+    });
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    console.error("Failed to update schedule:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -48,11 +48,8 @@ export default function RiddlesPage() {
     }
   }
 
-  async function handleSave(index: number) {
+  async function handleSchedule(index: number, scheduledAt: string) {
     const riddle = riddles[index];
-    const scheduledAt = scheduleTimes[index];
-    if (!scheduledAt) return;
-
     setSavingId(String(index));
 
     try {
@@ -94,6 +91,16 @@ export default function RiddlesPage() {
     }
   }
 
+  function handleSave(index: number) {
+    const scheduledAt = scheduleTimes[index];
+    if (!scheduledAt) return;
+    handleSchedule(index, scheduledAt);
+  }
+
+  function handlePostNow(index: number) {
+    handleSchedule(index, new Date().toISOString());
+  }
+
   const themes = [
     { value: "", label: "Random" },
     { value: "hewan", label: "Hewan" },
@@ -102,8 +109,6 @@ export default function RiddlesPage() {
     { value: "nama orang", label: "Nama Orang" },
     { value: "tempat", label: "Tempat" },
   ];
-
-  const placeholderTheme = themes.find((t) => t.value === theme)?.label || theme;
 
   return (
     <div className="max-w-2xl">
@@ -193,13 +198,23 @@ export default function RiddlesPage() {
                     .toISOString()
                     .slice(0, 16)}
                 />
-                <Button
-                  size="sm"
-                  onClick={() => handleSave(i)}
-                  disabled={savingId === String(i) || !scheduleTimes[i]}
-                >
-                  {savingId === String(i) ? "Saving..." : "Schedule Post"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handlePostNow(i)}
+                    disabled={savingId === String(i)}
+                  >
+                    {savingId === String(i) ? "Posting..." : "Post Now"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSave(i)}
+                    disabled={savingId === String(i) || !scheduleTimes[i]}
+                  >
+                    {savingId === String(i) ? "Saving..." : "Schedule"}
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}

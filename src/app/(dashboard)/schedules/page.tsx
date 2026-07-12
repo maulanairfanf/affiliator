@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -53,7 +53,7 @@ export default function SchedulesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -65,46 +65,50 @@ export default function SchedulesPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchItems = useCallback(
-    async (pageNum: number, append: boolean) => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (debouncedSearch) params.set("search", debouncedSearch);
-        if (statusFilter !== "all") params.set("status", statusFilter);
-        if (startDate) params.set("startDate", startDate);
-        if (endDate) params.set("endDate", endDate);
-        params.set("page", String(pageNum));
-        params.set("pageSize", "20");
+  function fetchItems(pageNum: number, append: boolean) {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    params.set("page", String(pageNum));
+    params.set("pageSize", "20");
 
-        const res = await fetch(`/api/schedules?${params}`);
-        const result: FetchResult = await res.json();
-
-        if (append) {
-          setItems((prev) => [...prev, ...result.data]);
-        } else {
-          setItems(result.data);
-        }
+    fetch(`/api/schedules?${params}`)
+      .then((res) => res.json())
+      .then((result: FetchResult) => {
+        setItems((prev) => (append ? [...prev, ...result.data] : result.data));
         setTotal(result.total);
         setPage(result.page);
         setHasMore(result.hasMore);
-      } catch {
-        // silent
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [debouncedSearch, statusFilter, startDate, endDate]
-  );
+      })
+      .catch(() => {});
+  }
 
   useEffect(() => {
-    setItems([]);
-    setPage(1);
     fetchItems(1, false);
-  }, [fetchItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, statusFilter, startDate, endDate]);
 
   function handleLoadMore() {
     fetchItems(page + 1, true);
+  }
+
+  async function handlePostNow(id: string) {
+    try {
+      await fetch("/api/schedules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === id ? { ...i, status: "pending", scheduledAt: new Date().toISOString() } : i
+        )
+      );
+    } catch {
+      // silent
+    }
   }
 
   async function handleDelete(id: string) {
@@ -243,13 +247,21 @@ export default function SchedulesPage() {
                       </span>
                     </div>
                   </div>
-                  <Button
-                    size="xs"
-                    variant="destructive"
-                    onClick={() => handleDelete(s.id)}
-                  >
-                    Delete
-                  </Button>
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      size="xs"
+                      onClick={() => handlePostNow(s.id)}
+                    >
+                      Post Now
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="destructive"
+                      onClick={() => handleDelete(s.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}

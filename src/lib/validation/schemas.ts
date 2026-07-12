@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ProductSource, Platform, ContentType, TemplateStyle, ScheduleStatus } from "@/lib/constants";
+import { ProductSource, Platform, ContentType, TemplateStyle } from "@/lib/constants";
 
 export const createProductSchema = z.object({
   title: z.string().min(1, "Title is required"),

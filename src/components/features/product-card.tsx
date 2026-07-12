@@ -34,7 +34,7 @@ export function ProductCard({ product, onDelete, className }: ProductCardProps) 
         <Card className="overflow-hidden transition-colors hover:bg-muted/50">
           <div className="aspect-square bg-muted">
             {product.imageUrl ? (
-              <img
+                <img
                 src={product.imageUrl}
                 alt={product.title}
                 className="h-full w-full object-cover"

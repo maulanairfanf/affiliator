@@ -17,6 +17,7 @@ export class ManualProvider implements ProductProvider {
   source = "manual" as ProductSource;
 
   async search(_query: string): Promise<ProductSearchResult[]> {
+    void _query;
     return [];
   }
 

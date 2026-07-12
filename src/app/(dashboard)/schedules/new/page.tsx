@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,26 +32,30 @@ export default function NewSchedulePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadProducts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/products");
-      const json = await res.json();
-      if (json.data) setProducts(json.data.map((p: Product) => ({ value: p.id, label: p.title })));
-    } catch {}
+  useEffect(() => {
+    fetch("/api/products")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data) setProducts(json.data.map((p: Product) => ({ value: p.id, label: p.title })));
+      })
+      .catch(() => {});
   }, []);
 
-  const loadContents = useCallback(async () => {
-    try {
-      const res = await fetch("/api/contents");
-      const json = await res.json();
-      if (json.data) setContentOptions(json.data.map((c: { id: string; type: string; platform: string }) => ({ value: c.id, label: `${c.type} — ${c.platform}` })));
-    } catch {}
+  useEffect(() => {
+    fetch("/api/contents")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.data) {
+          setContentOptions(
+            json.data.map((c: { id: string; title?: string | null; type: string; platform: string }) => ({
+              value: c.id,
+              label: c.title || `${c.type} — ${c.platform}`,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
   }, []);
-
-  useState(() => {
-    loadProducts();
-    loadContents();
-  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductCard } from "@/components/features/product-card";
 import {
@@ -37,7 +36,7 @@ export default function ProductsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
@@ -47,41 +46,28 @@ export default function ProductsPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchItems = useCallback(
-    async (pageNum: number, append: boolean) => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (debouncedSearch) params.set("search", debouncedSearch);
-        if (sourceFilter !== "all") params.set("source", sourceFilter);
-        params.set("page", String(pageNum));
-        params.set("pageSize", "20");
+  function fetchItems(pageNum: number, append: boolean) {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (sourceFilter !== "all") params.set("source", sourceFilter);
+    params.set("page", String(pageNum));
+    params.set("pageSize", "20");
 
-        const res = await fetch(`/api/products?${params}`);
-        const result: FetchResult = await res.json();
-
-        if (append) {
-          setItems((prev) => [...prev, ...result.data]);
-        } else {
-          setItems(result.data);
-        }
+    fetch(`/api/products?${params}`)
+      .then((res) => res.json())
+      .then((result: FetchResult) => {
+        setItems((prev) => (append ? [...prev, ...result.data] : result.data));
         setTotal(result.total);
         setPage(result.page);
         setHasMore(result.hasMore);
-      } catch {
-        // silent
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [debouncedSearch, sourceFilter]
-  );
+      })
+      .catch(() => {});
+  }
 
   useEffect(() => {
-    setItems([]);
-    setPage(1);
     fetchItems(1, false);
-  }, [fetchItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, sourceFilter]);
 
   async function handleDelete(id: string) {
     try {

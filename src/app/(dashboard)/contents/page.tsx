@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Platform, ContentType, TemplateStyle } from "@/lib/constants";
+import type { Platform, TemplateStyle } from "@/lib/constants";
 import {
   Platform as PlatformConst,
   ContentType as ContentTypeConst,
@@ -188,6 +188,51 @@ export default function ContentsPage() {
     }
   }
 
+  async function handlePostNow() {
+    if (!content) return;
+    try {
+      const contentRes = await fetch("/api/contents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId,
+          platform,
+          type: selectedTypes[0] || "long_caption",
+          content,
+          title: contentTitle || undefined,
+        }),
+      });
+      if (!contentRes.ok) {
+        const json = await contentRes.json();
+        setError(json.error || "Failed to save");
+        return;
+      }
+
+      const contentId = (await contentRes.json()).data.id;
+
+      const scheduleRes = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform,
+          contentId,
+          productId,
+          scheduledAt: new Date().toISOString(),
+        }),
+      });
+
+      if (!scheduleRes.ok) {
+        const json = await scheduleRes.json();
+        setError(json.error || "Failed to schedule");
+        return;
+      }
+
+      router.push("/schedules");
+    } catch {
+      setError("Failed to post now");
+    }
+  }
+
   return (
     <div className="max-w-3xl">
       <h1 className="mb-6 text-2xl font-bold">Content Generator</h1>
@@ -346,9 +391,14 @@ export default function ContentsPage() {
             disabled={isGenerating}
           />
           {!isGenerating && content && (
-            <Button onClick={handleSave} className="mt-2">
-              Save to Library
-            </Button>
+            <div className="mt-2 flex gap-2">
+              <Button onClick={handleSave} variant="outline">
+                Save to Library
+              </Button>
+              <Button onClick={handlePostNow}>
+                Post Now
+              </Button>
+            </div>
           )}
         </Card>
       )}
