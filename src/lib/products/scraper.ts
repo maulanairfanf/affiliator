@@ -31,8 +31,14 @@ async function fetchAsCrawler(url: string): Promise<{ html: string; finalUrl: st
   debug.chromeStatus = chromeRes.status;
   debug.chromeUrl = chromeRes.url;
 
-  // Step 2: Crawler UA on the real URL to get server-rendered HTML
-  const crawlerRes = await fetch(chromeRes.url, {
+  // Step 2: Build desktop URL (has OG meta tags for crawler UA)
+  const ids = extractShopItem(chromeRes.url);
+  let crawlerUrl = chromeRes.url;
+  if (ids) {
+    // Construct the desktop product URL format that serves OG meta tags
+    crawlerUrl = `https://shopee.co.id/product-i.${ids.shopId}.${ids.itemId}`;
+  }
+  const crawlerRes = await fetch(crawlerUrl, {
     redirect: "follow",
     headers: { "User-Agent": CRAWLER_UA },
   });
@@ -80,9 +86,15 @@ function extractJsonLd($: cheerio.CheerioAPI): Record<string, unknown> {
 }
 
 function extractShopItem(url: string): { shopId: string; itemId: string } | null {
-  const match = url.match(/i\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return { shopId: match[1], itemId: match[2] };
+  // Pattern 1: shopee.co.id/...-i.{shopID}.{itemID}
+  const m1 = url.match(/i\.(\d+)\.(\d+)/);
+  if (m1) return { shopId: m1[1], itemId: m1[2] };
+
+  // Pattern 2: shopee.co.id/{text}/{shopID}/{itemID} (mobile URLs)
+  const m2 = url.match(/shopee\.co\.id\/[^/]+\/(\d+)\/(\d+)/);
+  if (m2) return { shopId: m2[1], itemId: m2[2] };
+
+  return null;
 }
 
 async function scrapeShopeeFromApi(finalUrl: string): Promise<ProductSearchResult | null> {
@@ -136,29 +148,11 @@ async function scrapeShopeeFromApi(finalUrl: string): Promise<ProductSearchResul
         sourceUrl: finalUrl,
         source: ProductSource.Shopee,
       };
-    } catch (error) {
-      console.error("[Scraper] API error:", error instanceof Error ? error.message : String(error));
+    } catch {
+      // Shopee API requires auth, ignore
     }
   }
 
-  console.error("[Scraper] All Shopee APIs failed");
-  return null;
-}
-
-function extractPriceFromText($: cheerio.CheerioAPI): number | null {
-  const text = $("body").text();
-  const patterns = [
-    /Rp\s*([\d.,]+)/,
-    /harga\s*:\s*Rp\s*([\d.,]+)/i,
-    /price["']?\s*:\s*["']?([\d.]+)/,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const num = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
-      if (!isNaN(num) && num > 0) return num;
-    }
-  }
   return null;
 }
 
@@ -201,31 +195,10 @@ export async function scrapeFromUrl(url: string): Promise<ProductSearchResult> {
 
     const description = meta.ogDescription || (ld.description as string) || meta.metaDescription || null;
     const imageUrl = meta.ogImage || (ld.image as string) || meta.twitterImage || null;
-    let price = meta.metaPrice ? parseFloat(meta.metaPrice) : (ld.price as number) || 0;
+    const price = meta.metaPrice ? parseFloat(meta.metaPrice) : (ld.price as number) || 0;
     const currency = meta.metaCurrency || (ld.currency as string) || "IDR";
 
-    if (!price) {
-      const htmlPrice = extractPriceFromText($);
-      if (htmlPrice) price = htmlPrice;
-    }
-
-    logDebug("[Scraper] ────────────────");
-    logDebug("[Scraper] Original URL:", debug.originalUrl);
-    logDebug("[Scraper] Chrome status:", debug.chromeStatus, "| URL:", debug.chromeUrl);
-    logDebug("[Scraper] Crawler status:", debug.finalStatus, "| URL:", debug.finalUrl);
-    logDebug("[Scraper] Content-Type:", debug.contentType);
-    logDebug("[Scraper] HTML size:", debug.htmlLength, "chars");
-    logDebug("[Scraper] <title>:", meta.pageTitle || "—");
-    logDebug("[Scraper] og:title:", meta.ogTitle || "—");
-    logDebug("[Scraper] og:url:", meta.ogUrl || "—");
-    logDebug("[Scraper] og:image:", meta.ogImage?.slice(0, 80) || "—");
-    logDebug("[Scraper] og:description:", meta.ogDescription?.slice(0, 80) || "—");
-    logDebug("[Scraper] product:price:", meta.metaPrice || "—");
-    logDebug("[Scraper] JSON-LD name:", ld.name || "—");
-    logDebug("[Scraper] HTML price:", price > 0 ? price : "—");
-    logDebug("[Scraper] Final title:", title);
-    logDebug("[Scraper] Final price:", price);
-    logDebug("[Scraper] ────────────────");
+    console.log("[Scraper] Result:", { title, price, imageUrl, source });
 
     // If HTML didn't have price but it's a Shopee URL, try the API
     if (!price && source === ProductSource.Shopee) {

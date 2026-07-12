@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { listContents, createContent, deleteContent } from "@/lib/db/contents";
+import { listContents, createContent, deleteContent, updateContent } from "@/lib/db/contents";
 import { createContentSchema } from "@/lib/validation/schemas";
 
 export async function GET(request: NextRequest) {
@@ -54,6 +54,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: created }, { status: 201 });
   } catch (error) {
     console.error("Failed to create content:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id, content, title } = await request.json();
+    if (!id) {
+      return NextResponse.json(
+        { error: "Content ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const updated = await updateContent(id, session.user.id, { content, title });
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    console.error("Failed to update content:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

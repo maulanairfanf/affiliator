@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,19 +14,26 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ContentCard } from "@/components/features/content-card";
 import type { Platform, ContentType, TemplateStyle } from "@/lib/constants";
-import { Platform as PlatformConst, ContentType as ContentTypeConst, TemplateStyle as TemplateStyleConst } from "@/lib/constants";
+import {
+  Platform as PlatformConst,
+  ContentType as ContentTypeConst,
+  TemplateStyle as TemplateStyleConst,
+} from "@/lib/constants";
+import { api } from "@/lib/api";
 import type { Product } from "@/types/product";
 
 interface ProductOption {
   value: string;
   label: string;
+  affiliateLink?: string;
+}
+
+interface ProductsResponse {
+  data: Product[];
 }
 
 const contentTypes = [
-  { value: ContentTypeConst.ShortCaption, label: "Short Caption" },
   { value: ContentTypeConst.LongCaption, label: "Long Caption" },
   { value: ContentTypeConst.Hook, label: "Hooks (20x)" },
   { value: ContentTypeConst.Cta, label: "CTA (10x)" },
@@ -49,109 +57,35 @@ export default function ContentsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [productId, setProductId] = useState("");
+  const [affiliateLink, setAffiliateLink] = useState("");
   const [platform, setPlatform] = useState<Platform>(PlatformConst.Threads);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([ContentTypeConst.ShortCaption]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([ContentTypeConst.LongCaption]);
   const [style, setStyle] = useState<TemplateStyle>(TemplateStyleConst.SoftSelling);
+  const [contentTitle, setContentTitle] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, string>>({});
-  const [streamingTypes, setStreamingTypes] = useState<Set<string>>(new Set());
+  const [content, setContent] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
-  const loadProducts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/products");
-      const json = await res.json();
-      if (json.data) {
+  useEffect(() => {
+    api<ProductsResponse>("/products")
+      .then((json) => {
         setProducts(
-          json.data.map((p: Product) => ({ value: p.id, label: p.title }))
+          json.data.map((p: Product) => ({
+            value: p.id,
+            label: p.title,
+            affiliateLink: p.affiliateLink || undefined,
+          }))
         );
-      }
-    } catch {
-      // silent — products will show empty
-    }
+      })
+      .catch(() => {});
   }, []);
 
-  useState(() => {
-    loadProducts();
-  });
-
-  async function handleGenerate() {
-    if (!productId || selectedTypes.length === 0) return;
-
-    setIsGenerating(true);
-    setError(null);
-    setResults({});
-    setStreamingTypes(new Set());
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    for (const type of selectedTypes) {
-      if (controller.signal.aborted) break;
-
-      setStreamingTypes(new Set([type]));
-
-      try {
-        const res = await fetch("/api/contents/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId,
-            platform,
-            types: [type],
-            style,
-          }),
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const json = await res.json();
-          setError(json.error || `Failed to generate ${type}`);
-          continue;
-        }
-
-        const reader = res.body?.getReader();
-        if (!reader) continue;
-
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          try {
-            const parsed = JSON.parse(buffer);
-            const val = parsed[type];
-            if (val !== undefined && val !== null) {
-              setResults((prev) => ({
-                ...prev,
-                [type]: Array.isArray(val) ? val.join("\n\n") : String(val),
-              }));
-            }
-          } catch {
-            // incomplete JSON, wait for more
-          }
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name !== "AbortError") {
-          setError(`Failed to generate ${type}`);
-        }
-      }
-    }
-
-    setIsGenerating(false);
-    setStreamingTypes(new Set());
-    abortRef.current = null;
-  }
-
-  function handleStop() {
-    abortRef.current?.abort();
-    setIsGenerating(false);
-    setStreamingTypes(new Set());
+  function handleProductSelect(value: string | null) {
+    if (!value) return;
+    setProductId(value);
+    const product = products.find((p) => p.value === value);
+    setAffiliateLink(product?.affiliateLink || "");
   }
 
   function toggleType(value: string) {
@@ -162,9 +96,75 @@ export default function ContentsPage() {
     );
   }
 
-  async function handleSave(type: string) {
-    if (!results[type]) return;
+  async function handleGenerate() {
+    if (!productId || selectedTypes.length === 0) return;
 
+    setIsGenerating(true);
+    setError(null);
+    setContent("");
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch("/api/contents/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId,
+          platform,
+          types: selectedTypes,
+          style,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        setError(json.error || "Generation failed");
+        setIsGenerating(false);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) return;
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        try {
+          const parsed = JSON.parse(buffer);
+          const val = parsed.content || parsed.long_caption;
+          if (val) {
+            setContent(String(val));
+          }
+        } catch {
+          // incomplete JSON, wait for more
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== "AbortError") {
+        setError("Generation failed. Please try again.");
+      }
+    }
+
+    setIsGenerating(false);
+    abortRef.current = null;
+  }
+
+  function handleStop() {
+    abortRef.current?.abort();
+    setIsGenerating(false);
+  }
+
+  async function handleSave() {
+    if (!content) return;
     try {
       const res = await fetch("/api/contents", {
         method: "POST",
@@ -172,48 +172,35 @@ export default function ContentsPage() {
         body: JSON.stringify({
           productId,
           platform,
-          type,
-          content: results[type],
+          type: selectedTypes[0] || "long_caption",
+          content,
+          title: contentTitle || undefined,
         }),
       });
-
       if (res.ok) {
         router.push("/library");
+      } else {
+        const json = await res.json();
+        setError(json.error || "Failed to save");
       }
     } catch {
       setError("Failed to save content");
     }
   }
-
-  async function handleSaveAll() {
-    const entries = Object.entries(results);
-    if (entries.length === 0) return;
-
-    try {
-      for (const [type, content] of entries) {
-        await fetch("/api/contents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId, platform, type, content }),
-        });
-      }
-      router.push("/library");
-    } catch {
-      setError("Failed to save content");
-    }
-  }
-
-  const hasResults = Object.keys(results).length > 0;
 
   return (
     <div className="max-w-3xl">
       <h1 className="mb-6 text-2xl font-bold">Content Generator</h1>
 
       <Card className="mb-6 p-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4">
           <div className="space-y-2">
             <Label>Product</Label>
-            <Select items={products} value={productId} onValueChange={(v) => v && setProductId(v)}>
+            <Select
+              items={products}
+              value={productId}
+              onValueChange={handleProductSelect}
+            >
               <SelectTrigger className="w-full truncate">
                 <SelectValue placeholder="Select a product..." />
               </SelectTrigger>
@@ -229,14 +216,38 @@ export default function ContentsPage() {
 
           <div className="space-y-2">
             <Label>Platform</Label>
-            <Select items={platforms} value={platform} onValueChange={(v) => v && setPlatform(v as Platform)}>
-              <SelectTrigger>
+            <Select
+              items={platforms}
+              value={platform}
+              onValueChange={(v) => v && setPlatform(v as Platform)}
+            >
+              <SelectTrigger className="w-full truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {platforms.map((p) => (
                   <SelectItem key={p.value} value={p.value}>
                     {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Template Style</Label>
+            <Select
+              items={styles}
+              value={style}
+              onValueChange={(v) => v && setStyle(v as TemplateStyle)}
+            >
+              <SelectTrigger className="w-full truncate">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {styles.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -261,35 +272,48 @@ export default function ContentsPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Template Style</Label>
-            <Select
-              items={styles}
-              value={style}
-              onValueChange={(v) => v && setStyle(v as TemplateStyle)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {styles.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+       
         </div>
 
-        <div className="mt-4 flex gap-2">
+        {productId && (
+          <div className="mt-4 space-y-2">
+            <Label>Affiliate Link</Label>
+            <Input
+              value={affiliateLink}
+              onChange={(e) => setAffiliateLink(e.target.value)}
+              placeholder="https://shope.ee/..."
+            />
+            {!affiliateLink && (
+              <p className="text-xs text-muted-foreground">
+                No affiliate link set for this product.{" "}
+                <a
+                  href={`/products/${productId}`}
+                  className="text-primary hover:underline"
+                >
+                  Add one
+                </a>
+              </p>
+            )}
+          </div>
+        )}
+
+        {productId && (
+          <div className="mt-4 space-y-2">
+            <Label>Content Title</Label>
+            <Input
+              value={contentTitle}
+              onChange={(e) => setContentTitle(e.target.value)}
+              placeholder="e.g. Post promosi Jumat"
+            />
+          </div>
+        )}
+
+        <div className="mt-4 flex">
           <Button
             onClick={handleGenerate}
             disabled={isGenerating || !productId || selectedTypes.length === 0}
           >
-            {isGenerating
-              ? `Generating ${Object.keys(results).length + 1}/${selectedTypes.length}...`
-              : "Generate"}
+            {isGenerating ? "Generating..." : "Generate"}
           </Button>
           {isGenerating && (
             <Button variant="outline" onClick={handleStop}>
@@ -303,35 +327,30 @@ export default function ContentsPage() {
         )}
       </Card>
 
-      {isGenerating && !hasResults && (
-        <div className="space-y-3">
-          {selectedTypes.map((type) => (
-            <div key={type}>
-              <Skeleton className="mb-1 h-5 w-20" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {hasResults && (
-        <div className="space-y-3">
-          {Object.entries(results).map(([type, content]) => (
-            <ContentCard
-              key={type}
-              type={type}
-              content={content}
-              isStreaming={streamingTypes.has(type)}
-              onSave={() => handleSave(type)}
-            />
-          ))}
-
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleSaveAll}>
-              Save All to Library
-            </Button>
+      {(content || isGenerating) && (
+        <Card className="p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-sm font-medium">Generated Content</span>
+            {isGenerating && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+                Generating...
+              </span>
+            )}
           </div>
-        </div>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            rows={12}
+            disabled={isGenerating}
+          />
+          {!isGenerating && content && (
+            <Button onClick={handleSave} className="mt-2">
+              Save to Library
+            </Button>
+          )}
+        </Card>
       )}
     </div>
   );

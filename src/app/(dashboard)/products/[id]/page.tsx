@@ -57,11 +57,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
         </div>
       </div>
 
-      <ProductDetailActions
-        productId={product.id}
-        affiliateLink={product.affiliateLink}
-        sourceUrl={product.sourceUrl}
-      />
+      <ProductDetailActions product={product} />
     </div>
   );
 }

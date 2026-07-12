@@ -6,6 +6,7 @@ interface CreateContentData {
   platform: string;
   type: string;
   content: string;
+  title?: string;
   templateId?: string;
 }
 
@@ -67,6 +68,20 @@ export async function deleteContent(id: string, userId: string) {
     throw new Error("Content not found");
   }
   return prisma.content.delete({ where: { id } });
+}
+
+export async function updateContent(id: string, userId: string, data: { content?: string; title?: string | null }) {
+  const existing = await prisma.content.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+  if (!existing || existing.userId !== userId) {
+    throw new Error("Content not found");
+  }
+  const updateData: Record<string, unknown> = {};
+  if (data.content !== undefined) updateData.content = data.content;
+  if (data.title !== undefined) updateData.title = data.title;
+  return prisma.content.update({ where: { id }, data: updateData });
 }
 
 export async function countContents(userId: string) {

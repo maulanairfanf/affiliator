@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -20,7 +21,7 @@ interface ScheduleItem {
   status: string;
   scheduledAt: string;
   product: { title: string; imageUrl: string | null } | null;
-  content: { content: string };
+  content: { content: string; title?: string | null };
 }
 
 interface FetchResult {
@@ -56,6 +57,8 @@ export default function SchedulesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -69,6 +72,8 @@ export default function SchedulesPage() {
         const params = new URLSearchParams();
         if (debouncedSearch) params.set("search", debouncedSearch);
         if (statusFilter !== "all") params.set("status", statusFilter);
+        if (startDate) params.set("startDate", startDate);
+        if (endDate) params.set("endDate", endDate);
         params.set("page", String(pageNum));
         params.set("pageSize", "20");
 
@@ -89,7 +94,7 @@ export default function SchedulesPage() {
         setIsLoading(false);
       }
     },
-    [debouncedSearch, statusFilter]
+    [debouncedSearch, statusFilter, startDate, endDate]
   );
 
   useEffect(() => {
@@ -102,6 +107,21 @@ export default function SchedulesPage() {
     fetchItems(page + 1, true);
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this schedule?")) return;
+    try {
+      const res = await fetch(`/api/schedules?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((i) => i.id !== id));
+        setTotal((prev) => prev - 1);
+      }
+    } catch {
+      // silent
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -111,37 +131,64 @@ export default function SchedulesPage() {
             {total} schedule{total !== 1 ? "s" : ""} — closest first
           </p>
         </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="Search by product..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-48"
-          />
-          <Select
-            items={statusOptions}
-            value={statusFilter}
-            onValueChange={(v) => v && setStatusFilter(v)}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Link
-            href="/schedules/new"
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-          >
-            New
-          </Link>
-        </div>
+        <Link
+          href="/schedules/new"
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+        >
+          New Schedule
+        </Link>
       </div>
+
+      <Card className="mb-4 p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+          <div className="space-y-1 sm:flex-1">
+            <Label className="text-xs">Search</Label>
+            <Input
+              placeholder="By product..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <Select
+              items={statusOptions}
+              value={statusFilter}
+              onValueChange={(v) => v && setStatusFilter(v)}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">From</Label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-36"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">To</Label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-36"
+            />
+          </div>
+        </div>
+      </Card>
 
       {isLoading && items.length === 0 ? (
         <div className="space-y-3">
@@ -170,27 +217,39 @@ export default function SchedulesPage() {
           <div className="space-y-3">
             {items.map((s) => (
               <Card key={s.id} className="p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <Badge>{s.platform}</Badge>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-sm font-semibold">
+                      {s.content?.title || s.product?.title || "Riddle"}
+                    </p>
+                    {s.product?.title && s.content?.title && (
+                      <p className="text-xs text-muted-foreground">{s.product.title}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{s.content?.title ? "Content" : "Riddle"}</Badge>
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[s.status] || ""}`}
                       >
                         {s.status}
                       </span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(s.scheduledAt).toLocaleDateString("id-ID", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
                     </div>
-                    <p className="text-sm font-medium">{s.product?.title || "Riddle"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(s.scheduledAt).toLocaleDateString("id-ID", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
                   </div>
+                  <Button
+                    size="xs"
+                    variant="destructive"
+                    onClick={() => handleDelete(s.id)}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </Card>
             ))}

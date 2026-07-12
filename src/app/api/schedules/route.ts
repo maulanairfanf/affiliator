@@ -15,10 +15,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || undefined;
     const status = searchParams.get("status") || undefined;
+    const startDate = searchParams.get("startDate") || undefined;
+    const endDate = searchParams.get("endDate") || undefined;
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "20");
 
-    const result = await listSchedules({ userId: session.user.id, search, status, page, pageSize });
+    const result = await listSchedules({ userId: session.user.id, search, status, startDate, endDate, page, pageSize });
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to list schedules:", error);

@@ -109,7 +109,7 @@ export default function NewSchedulePage() {
           <div className="space-y-2">
             <Label>Content</Label>
             <Select items={contentOptions} value={contentId} onValueChange={(v) => v && setContentId(v)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full truncate">
                 <SelectValue placeholder="Select content..." />
               </SelectTrigger>
               <SelectContent>
@@ -125,7 +125,7 @@ export default function NewSchedulePage() {
           <div className="space-y-2">
             <Label>Platform</Label>
             <Select items={platforms} value={platform} onValueChange={(v) => v && setPlatform(v as Platform)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

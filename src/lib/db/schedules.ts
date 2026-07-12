@@ -12,17 +12,26 @@ interface ListSchedulesParams {
   userId: string;
   search?: string;
   status?: string;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   pageSize?: number;
 }
 
-export async function listSchedules({ userId, search, status, page = 1, pageSize = 20 }: ListSchedulesParams) {
+export async function listSchedules({ userId, search, status, startDate, endDate, page = 1, pageSize = 20 }: ListSchedulesParams) {
   const skip = (page - 1) * pageSize;
 
   const where: Record<string, unknown> = { userId };
 
   if (status && status !== "all") {
     where.status = status;
+  }
+
+  if (startDate || endDate) {
+    const scheduledAt: Record<string, Date> = {};
+    if (startDate) scheduledAt.gte = new Date(startDate);
+    if (endDate) scheduledAt.lte = new Date(endDate);
+    where.scheduledAt = scheduledAt;
   }
 
   if (search) {
@@ -39,7 +48,7 @@ export async function listSchedules({ userId, search, status, page = 1, pageSize
       take: pageSize,
       include: {
         product: { select: { title: true, imageUrl: true } },
-        content: { select: { content: true } },
+        content: { select: { content: true, title: true } },
       },
     }),
     prisma.schedule.count({ where }),

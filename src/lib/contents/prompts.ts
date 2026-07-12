@@ -11,8 +11,6 @@ const platformInstructions: Record<Platform, string> = {
 };
 
 const typeInstructions: Partial<Record<ContentType, string>> = {
-  [CT.ShortCaption]:
-    "Buat short caption 50-120 kata, hook di awal, bahasa Indonesia, tambahkan 5-10 hashtag relevan.",
   [CT.LongCaption]:
     "Buat long caption storytelling yang engaging, panjang 200-500 kata, bungkus dalam cerita relatable, ada konflik dan resolusi, tone personal.",
   [CT.Hook]:
@@ -53,7 +51,7 @@ export function buildSystemPrompt(
   const stylePart = style ? styleModifiers[style] : "";
 
   return `Kamu adalah asisten content creator profesional untuk affiliate marketing di Indonesia. ${platformPart} ${typesPart} ${stylePart}
-Output dalam format JSON dengan key: ${types.map((t) => `"${t}"`).join(", ")}. Gunakan bahasa Indonesia yang natural.`.trim();
+Output SATU konten utuh yang mengalir natural tanpa section per-type. Gabungkan semua elemen secara alami: hook sebagai pembuka caption, CTA sebagai penutup, hashtag di bagian akhir, product summary di tengah caption. Output JSON dengan SATU key "content" berisi teks konten yang utuh. Gunakan bahasa Indonesia yang natural. Pastikan total konten TIDAK lebih dari 400 karakter karena akan ditambahkan link afiliasi yang membuat total menjadi ~500 karakter untuk Threads.`.trim();
 }
 
 export function buildUserPrompt(product: {

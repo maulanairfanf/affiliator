@@ -7,6 +7,16 @@ const scrapeSchema = z.object({
   url: z.string().url("Invalid URL"),
 });
 
+function isAffiliateLink(url: string): boolean {
+  return (
+    url.includes("s.shopee.co.id") ||
+    url.includes("sp_atk=") ||
+    url.includes("utm_source=an_") ||
+    url.includes("utm_medium=affiliates") ||
+    url.includes("adtag=")
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -23,8 +33,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await scrapeFromUrl(parsed.data.url);
-    return NextResponse.json({ data: result });
+    const url = parsed.data.url;
+    const result = await scrapeFromUrl(url);
+    const affiliateUrl = isAffiliateLink(url) ? url : null;
+
+    return NextResponse.json({ data: result, affiliateUrl });
   } catch (error) {
     console.error("Failed to scrape URL:", error);
     return NextResponse.json({ error: "Failed to scrape URL" }, { status: 500 });

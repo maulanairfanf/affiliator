@@ -7,13 +7,14 @@ export interface Content {
   platform: Platform;
   type: ContentType;
   content: string;
+  title: string | null;
   templateId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface GeneratedContent {
-  short_caption?: string;
+  content?: string;
   long_caption?: string;
   hook?: string[];
   cta?: string[];

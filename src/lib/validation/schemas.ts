@@ -3,7 +3,7 @@ import { ProductSource, Platform, ContentType, TemplateStyle, ScheduleStatus } f
 
 export const createProductSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  price: z.number().positive("Price must be positive"),
+  price: z.number().optional().default(0),
   currency: z.string().default("IDR"),
   imageUrl: z.string().url().optional(),
   videoUrl: z.string().url().optional(),

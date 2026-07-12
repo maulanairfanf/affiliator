@@ -20,6 +20,7 @@ interface ContentItem {
   platform: string;
   type: string;
   content: string;
+  title: string | null;
   createdAt: Date | string;
   product: {
     title: string;
@@ -38,7 +39,6 @@ interface FetchResult {
 }
 
 const typeLabels: Record<string, string> = {
-  short_caption: "Short Caption",
   long_caption: "Long Caption",
   hook: "Hooks",
   cta: "Call to Action",
@@ -63,6 +63,9 @@ export function LibraryClient() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editTitle, setEditTitle] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -115,6 +118,40 @@ export function LibraryClient() {
     await navigator.clipboard.writeText(text);
     setCopiedId(item.id);
     setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  function handleStartEdit(item: ContentItem) {
+    setEditingId(item.id);
+    setEditContent(item.content);
+    setEditTitle(item.title || "");
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setEditContent("");
+    setEditTitle("");
+  }
+
+  async function handleSaveEdit(id: string) {
+    try {
+      await fetch("/api/contents", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, content: editContent, title: editTitle || null }),
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? { ...i, content: editContent, title: editTitle || null }
+            : i
+        )
+      );
+      setEditingId(null);
+      setEditContent("");
+      setEditTitle("");
+    } catch {
+      // silent
+    }
   }
 
   async function handleDelete(id: string) {
@@ -209,10 +246,6 @@ export function LibraryClient() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary">
-                          {typeLabels[item.type] || item.type}
-                        </Badge>
-                        <Badge>{item.platform}</Badge>
                         {item.product && (
                           <a
                             href={productLink || "#"}
@@ -223,10 +256,40 @@ export function LibraryClient() {
                             {item.product.title}
                           </a>
                         )}
+                        <br/>
+                        <Badge variant="secondary">
+                          {typeLabels[item.type] || item.type}
+                        </Badge>
+                        <Badge>{item.platform}</Badge>
+                
                       </div>
-                      <p className="whitespace-pre-wrap text-sm">
-                        {item.content}
-                      </p>
+                      {editingId === item.id ? (
+                        <div className="space-y-2">
+                          <input
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            placeholder="Content title..."
+                            className="w-full rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          />
+                          <textarea
+                            value={editContent}
+                            onChange={(e) => {
+                              setEditContent(e.target.value);
+                              e.target.style.height = "auto";
+                              e.target.style.height = e.target.scrollHeight + "px";
+                            }}
+                            className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 resize-none overflow-hidden"
+                            rows={3}
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          {item.title && (
+                            <p className="text-sm font-semibold">{item.title}</p>
+                          )}
+                          <p className="whitespace-pre-wrap text-sm">{item.content}</p>
+                        </div>
+                      )}
                       {productLink && (
                         <p className="mt-1.5 truncate text-xs text-blue-600 dark:text-blue-400">
                           🔗 {productLink}
@@ -246,20 +309,47 @@ export function LibraryClient() {
                           )}
                         </p>
                         <div className="flex gap-1">
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => handleCopy(item)}
-                          >
-                            {copiedId === item.id ? "Copied!" : "Copy"}
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => handleDelete(item.id)}
-                          >
-                            Delete
-                          </Button>
+                          {editingId === item.id ? (
+                            <>
+                              <Button
+                                size="xs"
+                                onClick={() => handleSaveEdit(item.id)}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={handleCancelEdit}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => handleCopy(item)}
+                              >
+                                {copiedId === item.id ? "Copied!" : "Copy"}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => handleStartEdit(item)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => handleDelete(item.id)}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

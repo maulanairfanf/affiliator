@@ -4,7 +4,6 @@ export const Platform = {
 export type Platform = (typeof Platform)[keyof typeof Platform];
 
 export const ContentType = {
-  ShortCaption: "short_caption",
   LongCaption: "long_caption",
   Hook: "hook",
   Cta: "cta",

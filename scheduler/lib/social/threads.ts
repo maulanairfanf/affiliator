@@ -69,25 +69,53 @@ export class ThreadsProvider {
       : item.content;
 
     console.log(`[Threads] Posting ${item.id}...`);
-    await page.goto(THREADS_URL, { waitUntil: "load" });
-    await page.waitForTimeout(2000);
 
-    const composeBtn = page
-      .locator('[role="button"]')
-      .filter({ hasText: /Buat|Tulis|Baru|New|Create/ });
-    await composeBtn.first().waitFor({ state: "visible", timeout: 10000 });
-    await composeBtn.first().click();
-    await page.waitForTimeout(1000);
+    console.log("[Threads] Navigating to Threads...");
+    await page.goto(THREADS_URL, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3000);
+    console.log("[Threads] Page loaded.");
 
+    console.log("[Threads] Looking for compose button...");
+    await page.evaluate(() => {
+      const buttons = document.querySelectorAll<HTMLElement>('[role="button"]');
+      for (const btn of buttons) {
+        if (/Buat|Tulis|Baru|New|Create/i.test(btn.textContent || "")) {
+          btn.click();
+          break;
+        }
+      }
+    });
+    await page.waitForTimeout(1500);
+    console.log("[Threads] Compose button clicked.");
+
+    console.log("[Threads] Filling textbox...");
     const textbox = page.locator('[role="textbox"]');
     await textbox.waitFor({ state: "visible", timeout: 5000 });
     await textbox.fill(postText);
     await page.waitForTimeout(500);
+    console.log("[Threads] Text filled. Length:", postText.length);
 
-    const isMac = process.platform === "darwin";
-    await page.keyboard.press(isMac ? "Meta+Enter" : "Control+Enter");
-    await page.waitForTimeout(2000);
+    console.log("[Threads] Clicking post button inside dialog...");
+    await page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) throw new Error("No dialog found");
+      const buttons = dialog.querySelectorAll('[role="button"]');
+      const postBtn = Array.from(buttons).find(btn =>
+        /Post|Kirim/i.test(btn.textContent || "")
+      );
+      if (!postBtn) throw new Error("Post button not found in dialog");
+      (postBtn as HTMLElement).click();
+    });
 
-    console.log(`[Threads] ${item.id} posted!`);
+    await page.waitForTimeout(3000);
+
+    const screenshotPath = path.join(
+      ERRORS_DIR,
+      `threads-confirm-${item.id}-${Date.now()}.png`
+    );
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    console.log("[Threads] Confirmation screenshot:", screenshotPath);
+
+    console.log(`[Threads] ${item.id} done!`);
   }
 }

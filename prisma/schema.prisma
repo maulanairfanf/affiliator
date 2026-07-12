@@ -44,9 +44,10 @@ model Content {
   id         String     @id @default(cuid())
   userId     String
   productId  String?
-  platform   String     // "tiktok" | "instagram" | "facebook" | "x" | "youtube"
-  type       String     // "caption" | "script" | "cta" | "hashtag" | "title" | "seo" | "faq"
+  platform   String     // "threads" only
+  type       String     // "long_caption" | "hook" | "cta" | "hashtag" | "product_summary" | "riddle"
   content    String
+  title      String?
   templateId String?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt

@@ -10,8 +10,6 @@ import { Label } from "@/components/ui/label";
 export default function NewProductPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState("IDR");
   const [imageUrl, setImageUrl] = useState("");
   const [description, setDescription] = useState("");
   const [affiliateLink, setAffiliateLink] = useState("");
@@ -42,10 +40,11 @@ export default function NewProductPage() {
 
       const product = json.data;
       setTitle(product.title || "");
-      setPrice(product.price ? String(product.price) : "");
-      setCurrency(product.currency || "IDR");
       setImageUrl(product.imageUrl || "");
       setDescription(product.description || "");
+      if (json.affiliateUrl) {
+        setAffiliateLink(json.affiliateUrl);
+      }
     } catch {
       setError("Failed to scrape URL. Try filling manually.");
     } finally {
@@ -55,7 +54,7 @@ export default function NewProductPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title || !price) return;
+    if (!title) return;
 
     setIsLoading(true);
     setError(null);
@@ -66,8 +65,6 @@ export default function NewProductPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          price: parseFloat(price),
-          currency,
           imageUrl: imageUrl || undefined,
           description: description || undefined,
           affiliateLink: affiliateLink || undefined,
@@ -129,28 +126,6 @@ export default function NewProductPage() {
               placeholder="Nama produk"
               required
             />
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex-1 space-y-2">
-              <Label>Price *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0"
-                required
-              />
-            </div>
-            <div className="w-full sm:w-24 space-y-2">
-              <Label>Currency</Label>
-              <Input
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                placeholder="IDR"
-              />
-            </div>
           </div>
 
           <div className="space-y-2">

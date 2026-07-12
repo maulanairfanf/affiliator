@@ -14,7 +14,6 @@ interface ContentCardProps {
 }
 
 const typeLabels: Record<string, string> = {
-  short_caption: "Short Caption",
   long_caption: "Long Caption",
   hook: "Hooks",
   cta: "Call to Action",
