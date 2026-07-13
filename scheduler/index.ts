@@ -24,11 +24,16 @@ async function main() {
     );
   }
 
-  cron.schedule(EVERY_MINUTE, () => {
-    checkAndPublish(browser, context);
-  });
+  // Random initial delay (0-30s) to avoid posting at exact :00 every time
+  const startupDelay = Math.floor(Math.random() * 30000);
+  console.log(`[Scheduler] Starting in ${(startupDelay / 1000).toFixed(1)}s...`);
 
-  console.log("[Scheduler] Worker started");
+  setTimeout(() => {
+    cron.schedule(EVERY_MINUTE, () => {
+      checkAndPublish(browser, context);
+    });
+    console.log("[Scheduler] Worker started");
+  }, startupDelay);
 
   const cleanup = async () => {
     console.log("[Scheduler] Shutting down...");

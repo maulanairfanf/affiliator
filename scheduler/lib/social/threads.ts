@@ -8,6 +8,9 @@ const ERRORS_DIR = path.join(STORAGE_DIR, "errors");
 
 const THREADS_URL = "https://www.threads.net";
 
+const MIN_DELAY_MS = 15_000;
+const MAX_DELAY_MS = 45_000;
+
 interface PostItem {
   id: string;
   content: string;
@@ -18,6 +21,10 @@ interface PostResult {
   id: string;
   success: boolean;
   error?: string;
+}
+
+function randomDelay(): number {
+  return Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS + 1)) + MIN_DELAY_MS;
 }
 
 export class ThreadsProvider {
@@ -37,7 +44,16 @@ export class ThreadsProvider {
     const page = await this.context.newPage();
 
     try {
-      for (const item of items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+
+        // Random delay before each post (skip first)
+        if (i > 0) {
+          const delay = randomDelay();
+          console.log(`[Threads] Waiting ${(delay / 1000).toFixed(1)}s before next post...`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+
         try {
           await this.postOne(page, item);
           results.push({ id: item.id, success: true });

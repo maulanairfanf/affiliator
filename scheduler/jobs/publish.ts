@@ -2,6 +2,8 @@ import type { Browser, BrowserContext } from "playwright";
 import { prisma } from "../lib/db";
 import { publishBatch } from "../lib/publisher";
 
+const MAX_POSTS_PER_DAY = parseInt(process.env.MAX_POSTS_PER_DAY || "10", 10);
+
 export async function checkAndPublish(
   browser: Browser | null,
   context: BrowserContext | null,
@@ -13,6 +15,24 @@ export async function checkAndPublish(
 
   const now = new Date();
 
+  // Daily limit check
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayCount = await prisma.schedule.count({
+    where: {
+      status: "published",
+      scheduledAt: { gte: todayStart },
+    },
+  });
+
+  if (todayCount >= MAX_POSTS_PER_DAY) {
+    console.log(
+      `[Scheduler] Daily limit reached (${todayCount}/${MAX_POSTS_PER_DAY}). Skipping.`
+    );
+    return;
+  }
+
   try {
     const dueSchedules = await prisma.schedule.findMany({
       where: {
@@ -20,6 +40,7 @@ export async function checkAndPublish(
         status: "pending",
       },
       include: { product: true, content: true },
+      take: MAX_POSTS_PER_DAY - todayCount,
     });
 
     console.log(`[Scheduler] Found ${dueSchedules.length} due schedules`);
